@@ -102,7 +102,12 @@ export async function autoAssignOverdueJobCards() {
     `SELECT job_card_id, dealer_id FROM job_cards
      WHERE technician_id IS NULL
        AND status IN ('registered', 'acknowledged')
-       AND TIMESTAMPDIFF(MINUTE, registered_at, NOW()) > 15`
+       AND (
+         TIMESTAMPDIFF(MINUTE, registered_at, NOW()) > 15
+         OR (priority = 'emergency' AND TIMESTAMPDIFF(MINUTE, registered_at, NOW()) > 2)
+         OR (priority = 'urgent' AND TIMESTAMPDIFF(MINUTE, registered_at, NOW()) > 5)
+       )
+     ORDER BY FIELD(priority, 'emergency', 'urgent', 'normal'), registered_at ASC`
   );
 
   for (const jc of overdue) {

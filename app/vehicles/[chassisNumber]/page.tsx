@@ -41,7 +41,7 @@ export default function PublicVehiclePage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ fontFamily: 'Inter, sans-serif', background: '#F7F7FB' }}>
+    <div className="h-screen overflow-y-auto flex items-center justify-center p-4" style={{ fontFamily: 'Inter, sans-serif', background: '#F7F7FB' }}>
       <div className="w-full max-w-md rounded-2xl bg-white border p-6" style={{ borderColor: BORDER }}>
         <p className="text-xs font-medium mb-1" style={{ color: VIOLET }}>AERYS SERVICE CONNECT</p>
         <h1 className="text-xl font-bold mb-4" style={{ color: INK }}>{data.model}</h1>

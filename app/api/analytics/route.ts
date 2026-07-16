@@ -14,28 +14,19 @@ function prefixCategory(partCode: string) {
 async function rangeStats(from: string, to: string) {
   const dateParams = [`${from} 00:00:00`, `${to} 23:59:59`];
 
-  const [[vehicleCount]]: any = await pool.query(`SELECT COUNT(*) AS total FROM vehicles`);
-  const [[jobCount]]: any = await pool.query(
-    `SELECT COUNT(*) AS total FROM job_cards WHERE registered_at BETWEEN ? AND ?`, dateParams
-  );
-  const [[claimCount]]: any = await pool.query(
-    `SELECT COUNT(*) AS total FROM warranty_claims WHERE submitted_at BETWEEN ? AND ?`, dateParams
-  );
-  const [[completedCount]]: any = await pool.query(
-    `SELECT COUNT(*) AS total FROM job_cards
-     WHERE status IN ('completed','delivered') AND registered_at BETWEEN ? AND ?`, dateParams
-  );
-  const [[resolutionRow]]: any = await pool.query(
-    `SELECT AVG(TIMESTAMPDIFF(HOUR, registered_at, service_completed_at)) / 24 AS avg_days
-     FROM job_cards WHERE service_completed_at IS NOT NULL AND registered_at BETWEEN ? AND ?`, dateParams
-  );
-  const [[revenueRow]]: any = await pool.query(
-    `SELECT SUM(jcpu.quantity * sp.unit_price) AS total
-     FROM job_card_parts_used jcpu
-     JOIN spare_parts sp ON jcpu.part_id = sp.part_id
-     JOIN job_cards jc ON jcpu.job_card_id = jc.job_card_id
-     WHERE jc.registered_at BETWEEN ? AND ?`, dateParams
-  );
+  const [
+    [[vehicleCount]], [[jobCount]], [[claimCount]], [[completedCount]], [[resolutionRow]], [[revenueRow]],
+    [[customerRatingRow]], [[technicianRatingRow]],
+  ]: any = await Promise.all([
+    pool.query(`SELECT COUNT(*) AS total FROM vehicles`),
+    pool.query(`SELECT COUNT(*) AS total FROM job_cards WHERE registered_at BETWEEN ? AND ?`, dateParams),
+    pool.query(`SELECT COUNT(*) AS total FROM warranty_claims WHERE submitted_at BETWEEN ? AND ?`, dateParams),
+    pool.query(`SELECT COUNT(*) AS total FROM job_cards WHERE status IN ('completed','delivered') AND registered_at BETWEEN ? AND ?`, dateParams),
+    pool.query(`SELECT AVG(TIMESTAMPDIFF(HOUR, registered_at, service_completed_at)) / 24 AS avg_days FROM job_cards WHERE service_completed_at IS NOT NULL AND registered_at BETWEEN ? AND ?`, dateParams),
+    pool.query(`SELECT SUM(jcpu.quantity * sp.unit_price) AS total FROM job_card_parts_used jcpu JOIN spare_parts sp ON jcpu.part_id = sp.part_id JOIN job_cards jc ON jcpu.job_card_id = jc.job_card_id WHERE jc.registered_at BETWEEN ? AND ?`, dateParams),
+    pool.query(`SELECT AVG(jcr.rating) AS avg_rating, COUNT(*) AS count FROM job_card_reviews jcr JOIN job_cards jc ON jcr.job_card_id = jc.job_card_id WHERE jcr.reviewer_role = 'customer' AND jc.registered_at BETWEEN ? AND ?`, dateParams),
+    pool.query(`SELECT AVG(jcr.rating) AS avg_rating, COUNT(*) AS count FROM job_card_reviews jcr JOIN job_cards jc ON jcr.job_card_id = jc.job_card_id WHERE jcr.reviewer_role = 'dealer' AND jc.registered_at BETWEEN ? AND ?`, dateParams),
+  ]);
 
   return {
     totalVehicles: vehicleCount.total,
@@ -44,6 +35,10 @@ async function rangeStats(from: string, to: string) {
     completedJobs: completedCount.total,
     avgResolutionDays: resolutionRow.avg_days ? Number(Number(resolutionRow.avg_days).toFixed(1)) : 0,
     revenue: revenueRow.total ? Number(revenueRow.total) : 0,
+    avgCustomerRating: customerRatingRow.avg_rating ? Number(Number(customerRatingRow.avg_rating).toFixed(1)) : null,
+    customerRatingCount: customerRatingRow.count,
+    avgTechnicianRating: technicianRatingRow.avg_rating ? Number(Number(technicianRatingRow.avg_rating).toFixed(1)) : null,
+    technicianRatingCount: technicianRatingRow.count,
   };
 }
 
@@ -62,25 +57,23 @@ export async function GET(request: Request) {
     const prevFromStr = prevFrom.toISOString().slice(0, 10);
     const prevToStr = prevTo.toISOString().slice(0, 10);
 
-    const current = await rangeStats(from, to);
-    const previous = await rangeStats(prevFromStr, prevToStr);
-
-    // Jobs trend (last 7 days) - total vs completed
-    const [trendRows]: any = await pool.query(`
-      SELECT DATE(registered_at) AS day,
-             COUNT(*) AS total_jobs,
-             SUM(CASE WHEN status IN ('completed','delivered') THEN 1 ELSE 0 END) AS completed_jobs
-      FROM job_cards
-      WHERE registered_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
-      GROUP BY DATE(registered_at)
-      ORDER BY day ASC
-    `);
-
-    // Jobs by status
-    const [statusRows]: any = await pool.query(
-      `SELECT status, COUNT(*) AS count FROM job_cards WHERE registered_at BETWEEN ? AND ? GROUP BY status`,
-      [`${from} 00:00:00`, `${to} 23:59:59`]
-    );
+    const [current, previous, [trendRows], [statusRows]] = await Promise.all([
+      rangeStats(from, to),
+      rangeStats(prevFromStr, prevToStr),
+      pool.query(`
+        SELECT DATE(registered_at) AS day,
+               COUNT(*) AS total_jobs,
+               SUM(CASE WHEN status IN ('completed','delivered') THEN 1 ELSE 0 END) AS completed_jobs
+        FROM job_cards
+        WHERE registered_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+        GROUP BY DATE(registered_at)
+        ORDER BY day ASC
+      `),
+      pool.query(
+        `SELECT status, COUNT(*) AS count FROM job_cards WHERE registered_at BETWEEN ? AND ? GROUP BY status`,
+        [`${from} 00:00:00`, `${to} 23:59:59`]
+      ),
+    ]) as any;
     const statusMap: Record<string, number> = { Completed: 0, 'In Progress': 0, Pending: 0, Cancelled: 0, 'On Hold': 0 };
     for (const row of statusRows) {
       if (['completed', 'delivered'].includes(row.status)) statusMap.Completed += row.count;
@@ -90,26 +83,50 @@ export async function GET(request: Request) {
       else if (row.status === 'cancelled') statusMap.Cancelled += row.count;
     }
 
-    // Top issue categories by job_cards.service_type (paid vs warranty)
-    const [serviceTypeRawRows]: any = await pool.query(
-      `SELECT service_type, COUNT(*) AS count
-       FROM job_cards
-       WHERE service_type IS NOT NULL AND registered_at BETWEEN ? AND ?
-       GROUP BY service_type
-       ORDER BY count DESC`,
-      [`${from} 00:00:00`, `${to} 23:59:59`]
-    );
-    const topIssueCategories = serviceTypeRawRows.map((r: any) => ({ label: r.service_type, count: r.count }));
+    const [[serviceTypeRawRows], [partRows], [revenueTrendRows], [dealerRevenueRows]] = await Promise.all([
+      pool.query(
+        `SELECT service_type, COUNT(*) AS count
+         FROM job_cards
+         WHERE service_type IS NOT NULL AND registered_at BETWEEN ? AND ?
+         GROUP BY service_type
+         ORDER BY count DESC`,
+        [`${from} 00:00:00`, `${to} 23:59:59`]
+      ),
+      pool.query(`
+        SELECT sp.part_code, COUNT(*) AS count
+        FROM job_card_parts_used jcpu
+        JOIN spare_parts sp ON jcpu.part_id = sp.part_id
+        JOIN job_cards jc ON jcpu.job_card_id = jc.job_card_id
+        WHERE jc.registered_at BETWEEN ? AND ?
+        GROUP BY jcpu.part_id
+      `, [`${from} 00:00:00`, `${to} 23:59:59`]),
+      pool.query(`
+        SELECT DATE(jc.registered_at) AS day, SUM(jcpu.quantity * sp.unit_price) AS revenue
+        FROM job_card_parts_used jcpu
+        JOIN spare_parts sp ON jcpu.part_id = sp.part_id
+        JOIN job_cards jc ON jcpu.job_card_id = jc.job_card_id
+        WHERE jc.registered_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+        GROUP BY DATE(jc.registered_at)
+        ORDER BY day ASC
+      `),
+      pool.query(`
+        SELECT d.dealer_id, d.dealer_name, SUM(jcpu.quantity * sp.unit_price) AS revenue,
+               (SELECT AVG(jcr.rating) FROM job_card_reviews jcr
+                JOIN job_cards jc2 ON jcr.job_card_id = jc2.job_card_id
+                WHERE jc2.dealer_id = d.dealer_id AND jcr.reviewer_role = 'customer'
+                  AND jc2.registered_at BETWEEN ? AND ?) AS avg_rating
+        FROM job_card_parts_used jcpu
+        JOIN spare_parts sp ON jcpu.part_id = sp.part_id
+        JOIN job_cards jc ON jcpu.job_card_id = jc.job_card_id
+        JOIN dealers d ON jc.dealer_id = d.dealer_id
+        WHERE jc.registered_at BETWEEN ? AND ?
+        GROUP BY d.dealer_id
+        ORDER BY revenue DESC
+        LIMIT 5
+      `, [`${from} 00:00:00`, `${to} 23:59:59`, `${from} 00:00:00`, `${to} 23:59:59`]),
+    ]) as any;
 
-    // Jobs by service type (via parts used, part_code prefix)
-    const [partRows]: any = await pool.query(`
-      SELECT sp.part_code, COUNT(*) AS count
-      FROM job_card_parts_used jcpu
-      JOIN spare_parts sp ON jcpu.part_id = sp.part_id
-      JOIN job_cards jc ON jcpu.job_card_id = jc.job_card_id
-      WHERE jc.registered_at BETWEEN ? AND ?
-      GROUP BY jcpu.part_id
-    `, [`${from} 00:00:00`, `${to} 23:59:59`]);
+    const topIssueCategories = serviceTypeRawRows.map((r: any) => ({ label: r.service_type, count: r.count }));
     const categoryMap: Record<string, number> = {};
     for (const row of partRows) {
       const cat = prefixCategory(row.part_code);
@@ -120,30 +137,6 @@ export async function GET(request: Request) {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
-    // Revenue trend (last 7 days)
-    const [revenueTrendRows]: any = await pool.query(`
-      SELECT DATE(jc.registered_at) AS day, SUM(jcpu.quantity * sp.unit_price) AS revenue
-      FROM job_card_parts_used jcpu
-      JOIN spare_parts sp ON jcpu.part_id = sp.part_id
-      JOIN job_cards jc ON jcpu.job_card_id = jc.job_card_id
-      WHERE jc.registered_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
-      GROUP BY DATE(jc.registered_at)
-      ORDER BY day ASC
-    `);
-
-    // Top performing dealers by revenue (parts cost) in range
-    const [dealerRevenueRows]: any = await pool.query(`
-      SELECT d.dealer_id, d.dealer_name, SUM(jcpu.quantity * sp.unit_price) AS revenue
-      FROM job_card_parts_used jcpu
-      JOIN spare_parts sp ON jcpu.part_id = sp.part_id
-      JOIN job_cards jc ON jcpu.job_card_id = jc.job_card_id
-      JOIN dealers d ON jc.dealer_id = d.dealer_id
-      WHERE jc.registered_at BETWEEN ? AND ?
-      GROUP BY d.dealer_id
-      ORDER BY revenue DESC
-      LIMIT 5
-    `, [`${from} 00:00:00`, `${to} 23:59:59`]);
-
     const payloadBase = {
       current, changes: {}, previous,
       jobsTrend: trendRows.map((r: any) => ({ day: r.day, totalJobs: r.total_jobs, completedJobs: r.completed_jobs })),
@@ -151,7 +144,12 @@ export async function GET(request: Request) {
       jobsByServiceType: serviceTypeData,
       topIssueCategories,
       revenueTrend: revenueTrendRows.map((r: any) => ({ day: r.day, revenue: r.revenue || 0 })),
-      topDealers: dealerRevenueRows.map((r: any) => ({ id: r.dealer_id, name: r.dealer_name, revenue: r.revenue || 0 })),
+      topDealers: dealerRevenueRows.map((r: any) => ({
+        id: r.dealer_id,
+        name: r.dealer_name,
+        revenue: r.revenue || 0,
+        avgRating: r.avg_rating ? Number(Number(r.avg_rating).toFixed(1)) : null,
+      })),
     };
 
     if (new URL(request.url).searchParams.get('format') === 'csv') {

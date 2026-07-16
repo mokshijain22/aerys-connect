@@ -129,7 +129,7 @@ export default function ClaimDetailPage() {
 
   if (!claim) {
     return (
-      <div className="min-h-screen bg-slate-50 p-6">
+      <div className="h-screen overflow-y-auto bg-slate-50 p-6">
         <p className="text-sm text-red-600">{error || 'Claim not found'}</p>
       </div>
     );

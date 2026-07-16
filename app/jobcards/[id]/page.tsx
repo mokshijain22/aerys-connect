@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 
 const VIOLET = '#6C5CE7';
 const VIOLET_DIM = 'rgba(108,92,231,0.10)';
@@ -31,9 +32,24 @@ export default function JobCardDetailPage() {
   const router = useRouter();
   const id = params.id as string;
 
+  const { data: session } = useSession();
+  const role = (session?.user as any)?.role || '';
+
   const [jc, setJc] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const [reviews, setReviews] = useState<Record<string, any>>({});
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewText, setReviewText] = useState('');
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+
+  const REVIEW_LABELS: Record<string, string> = {
+    customer: 'Customer review (of the service)',
+    technician: "Technician's review (of the customer)",
+    dealer: "Dealer's review (of the technician)",
+  };
 
   useEffect(() => {
     fetch(`/api/jobcards/${id}`)
@@ -44,6 +60,35 @@ export default function JobCardDetailPage() {
       })
       .finally(() => setLoading(false));
   }, [id]);
+
+  function loadReviews() {
+    fetch(`/api/jobcards/${id}/review`)
+      .then((res) => res.json())
+      .then((json) => { if (json.success) setReviews(json.data); });
+  }
+
+  useEffect(() => {
+    if (jc?.status === 'delivered') loadReviews();
+  }, [jc?.status, id]);
+
+  async function submitReview(e: React.FormEvent) {
+    e.preventDefault();
+    setReviewSubmitting(true);
+    setReviewError('');
+    try {
+      const res = await fetch(`/api/jobcards/${id}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating: reviewRating, reviewText }),
+      });
+      const json = await res.json();
+      if (!json.success) { setReviewError(json.error); return; }
+      setReviewText('');
+      loadReviews();
+    } finally {
+      setReviewSubmitting(false);
+    }
+  }
 
   if (loading) {
     return <div className="min-h-screen p-6 text-sm" style={{ color: MUTED }}>Loading...</div>;
@@ -62,7 +107,7 @@ export default function JobCardDetailPage() {
   const completionPhotos = jc.attachments.filter((a: any) => a.stage === 'completion');
 
   return (
-    <div className="min-h-screen p-6" style={{ backgroundColor: '#FAFAFF', fontFamily: 'Inter, sans-serif' }}>
+    <div className="h-screen overflow-y-auto p-6" style={{ backgroundColor: '#FAFAFF', fontFamily: 'Inter, sans-serif' }}>
       <button onClick={() => router.push('/jobcards')} className="text-sm font-medium mb-4" style={{ color: VIOLET }}>
         ← Back to job cards
       </button>
@@ -180,6 +225,46 @@ export default function JobCardDetailPage() {
             <p>Delivered: {fmt(jc.delivered_at)}</p>
           </div>
         </div>
+
+        {jc.status === 'delivered' && ['customer', 'technician', 'dealer'].includes(role) && (
+          <div className="pt-4 border-t mt-4" style={{ borderColor: BORDER }}>
+            <p className="text-sm font-semibold mb-3" style={{ color: INK }}>{REVIEW_LABELS[role]}</p>
+            {reviews[role] ? (
+              <div>
+                <p style={{ color: '#F5A623' }}>{'★'.repeat(reviews[role].rating)}{'☆'.repeat(5 - reviews[role].rating)}</p>
+                {reviews[role].review_text && <p className="text-sm mt-1" style={{ color: INK }}>{reviews[role].review_text}</p>}
+              </div>
+            ) : (
+              <form onSubmit={submitReview} className="space-y-3">
+                <select value={reviewRating} onChange={(e) => setReviewRating(Number(e.target.value))}
+                  className="rounded-lg px-3 py-2 text-sm border" style={{ borderColor: BORDER }}>
+                  {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{n} star{n > 1 ? 's' : ''}</option>)}
+                </select>
+                <textarea value={reviewText} onChange={(e) => setReviewText(e.target.value)}
+                  placeholder="Optional feedback..." rows={3}
+                  className="w-full rounded-lg px-3 py-2 text-sm border resize-none" style={{ borderColor: BORDER }} />
+                {reviewError && <p className="text-sm" style={{ color: RED }}>{reviewError}</p>}
+                <button type="submit" disabled={reviewSubmitting}
+                  className="text-sm font-semibold text-white px-4 py-2 rounded-lg disabled:opacity-50" style={{ backgroundColor: VIOLET }}>
+                  {reviewSubmitting ? 'Submitting...' : 'Submit review'}
+                </button>
+              </form>
+            )}
+
+            {/* Show other completed reviews as read-only context, if any exist */}
+            {Object.entries(reviews).filter(([r]) => r !== role).length > 0 && (
+              <div className="mt-4 pt-4 border-t space-y-3" style={{ borderColor: BORDER }}>
+                {Object.entries(reviews).filter(([r]) => r !== role).map(([r, rv]: any) => (
+                  <div key={r}>
+                    <p className="text-xs font-medium mb-1" style={{ color: MUTED }}>{REVIEW_LABELS[r]}</p>
+                    <p style={{ color: '#F5A623' }}>{'★'.repeat(rv.rating)}{'☆'.repeat(5 - rv.rating)}</p>
+                    {rv.review_text && <p className="text-sm mt-0.5" style={{ color: INK }}>{rv.review_text}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

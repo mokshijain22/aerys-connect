@@ -39,6 +39,8 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 const PART_CATEGORIES = ['Battery', 'Motor', 'Charger', 'Brakes', 'Electrical', 'Body', 'Tyres', 'Other'];
+const PRIORITY_LABEL: Record<string, string> = { normal: 'Normal', urgent: 'Urgent', emergency: 'Emergency' };
+const PRIORITY_COLOR: Record<string, string> = { normal: MUTED, urgent: '#F5A623', emergency: '#E24B4A' };
 const SYMPTOM_TYPES = [
   'Not working / No power',
   'Making unusual noise',
@@ -63,7 +65,7 @@ export default function JobCardsPage() {
   const { data: session } = useSession();
   const role = (session?.user as any)?.role || '';
 
-  const [form, setForm] = useState({ chassisNumber: '', complaintText: '', serviceType: 'paid', partCategory: '', symptomType: '' });
+  const [form, setForm] = useState({ chassisNumber: '', complaintText: '', serviceType: 'paid', partCategory: '', symptomType: '', priority: 'normal' });
   const [photos, setPhotos] = useState<File[]>([]);
   const [message, setMessage] = useState('');
   const [jobCards, setJobCards] = useState<any[]>([]);
@@ -149,7 +151,7 @@ export default function JobCardsPage() {
         }
       }
       setMessage('Job card created!');
-      setForm({ chassisNumber: '', complaintText: '', serviceType: 'paid', partCategory: '', symptomType: '' });
+      setForm({ chassisNumber: '', complaintText: '', serviceType: 'paid', partCategory: '', symptomType: '', priority: 'normal' });
       setPhotos([]);
       setWarranty(null);
       loadJobCards();
@@ -562,6 +564,16 @@ export default function JobCardsPage() {
               </div>
 
               <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Priority</label>
+                <select name="priority" value={form.priority} onChange={handleChange}
+                  className="w-full rounded-2xl px-4 py-3 text-sm outline-none" style={inputStyle} onFocus={inputFocus} onBlur={inputBlurH}>
+                  <option value="normal">Normal</option>
+                  <option value="urgent">Urgent</option>
+                  <option value="emergency">Emergency</option>
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Which part (optional)</label>
                 <select name="partCategory" value={form.partCategory} onChange={handleChange}
                   className="w-full rounded-2xl px-4 py-3 text-sm outline-none" style={inputStyle} onFocus={inputFocus} onBlur={inputBlurH}>
@@ -597,7 +609,7 @@ export default function JobCardsPage() {
             </div>
 
             <div className="flex justify-end gap-3 mt-6">
-              <button type="button" onClick={() => { setForm({ chassisNumber: '', complaintText: '', serviceType: 'paid', partCategory: '', symptomType: '' }); setPhotos([]); }}
+              <button type="button" onClick={() => { setForm({ chassisNumber: '', complaintText: '', serviceType: 'paid', partCategory: '', symptomType: '', priority: 'normal' }); setPhotos([]); }}
                 className="px-5 py-2.5 rounded-xl text-sm font-medium border" style={{ borderColor: BORDER, color: INK }}>
                 Reset
               </button>
@@ -635,7 +647,7 @@ export default function JobCardsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left" style={{ color: MUTED }}>
-                  {['Customer', 'Chassis No.', 'Complaint', 'Type', 'Status', 'Time elapsed', 'Action', 'Details'].map((h) => (
+                  {['Customer', 'Chassis No.', 'Complaint', 'Type', 'Priority', 'Status', 'Time elapsed', 'Action', 'Details'].map((h) => (
                     <th key={h} className="px-5 py-2 font-medium text-xs">{h}</th>
                   ))}
                 </tr>
@@ -656,6 +668,15 @@ export default function JobCardsPage() {
                       <td className="px-5 py-3">
                         <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ backgroundColor: VIOLET_DIM, color: VIOLET }}>
                           {jc.service_type === 'paid' ? 'Paid' : 'Warranty'}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">
+                        <span
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
+                          style={{ backgroundColor: `${PRIORITY_COLOR[jc.priority] || MUTED}18`, color: PRIORITY_COLOR[jc.priority] || MUTED }}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: PRIORITY_COLOR[jc.priority] || MUTED }} />
+                          {PRIORITY_LABEL[jc.priority] || 'Normal'}
                         </span>
                       </td>
                       <td className="px-5 py-3">
@@ -686,7 +707,7 @@ export default function JobCardsPage() {
                   );
                 })}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={8} className="px-5 py-8 text-center text-sm" style={{ color: MUTED }}>No job cards found.</td></tr>
+                  <tr><td colSpan={9} className="px-5 py-8 text-center text-sm" style={{ color: MUTED }}>No job cards found.</td></tr>
                 )}
               </tbody>
             </table>

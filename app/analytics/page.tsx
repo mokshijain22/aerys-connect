@@ -28,6 +28,10 @@ type AnalyticsSummary = {
   completedJobs: number;
   avgResolutionDays: number;
   revenue: number;
+  avgCustomerRating: number | null;
+  customerRatingCount: number;
+  avgTechnicianRating: number | null;
+  technicianRatingCount: number;
 };
 
 type AnalyticsData = {
@@ -38,7 +42,7 @@ type AnalyticsData = {
   jobsByStatus: Record<string, number>;
   jobsByServiceType: { label: string; count: number }[];
   revenueTrend: { day: string; revenue: number }[];
-  topDealers: { id: number; name: string; revenue: number }[];
+  topDealers: { id: number; name: string; revenue: number; avgRating: number | null }[];
   topIssueCategories: { label: string; count: number }[];
 };
 
@@ -167,7 +171,23 @@ export default function AnalyticsPage() {
             { label: 'Avg. Resolution Time', value: `${data.current.avgResolutionDays} Days`, change: data.changes.avgResolutionDays, icon: '⏱️', suffix: ' days', lowerIsBetter: true },
             { label: 'Completed Jobs', value: data.current.completedJobs, change: data.changes.completedJobs, icon: '✅' },
             { label: 'Revenue (parts)', value: formatLakh(data.current.revenue), change: data.changes.revenue, icon: '₹' },
-          ].map((s) => (
+            {
+              label: 'Avg Customer Rating',
+              value: data.current.avgCustomerRating ? `${data.current.avgCustomerRating} ★` : '—',
+              change: 0,
+              icon: '⭐',
+              noChange: data.current.customerRatingCount === 0,
+              sub: `${data.current.customerRatingCount} review${data.current.customerRatingCount === 1 ? '' : 's'}`,
+            },
+            {
+              label: 'Avg Technician Rating',
+              value: data.current.avgTechnicianRating ? `${data.current.avgTechnicianRating} ★` : '—',
+              change: 0,
+              icon: '🔧',
+              noChange: data.current.technicianRatingCount === 0,
+              sub: `${data.current.technicianRatingCount} review${data.current.technicianRatingCount === 1 ? '' : 's'}`,
+            },
+          ].map((s: any) => (
             <div key={s.label} className="group rounded-[20px] p-6 bg-white border overflow-hidden transition-all duration-200 fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW, background: `linear-gradient(160deg, #fff 65%, ${VIOLET}0d 100%)` }}
               onMouseEnter={(e) => { e.currentTarget.style.boxShadow = CARD_SHADOW_HOVER; e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.borderColor = `${VIOLET}55`; }}
               onMouseLeave={(e) => { e.currentTarget.style.boxShadow = CARD_SHADOW; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = BORDER; }}
@@ -175,7 +195,11 @@ export default function AnalyticsPage() {
               <span className="w-10 h-10 rounded-2xl flex items-center justify-center mb-3 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3" style={{ background: `linear-gradient(135deg, ${VIOLET_LIGHT}CC, ${VIOLET})`, boxShadow: `0 6px 16px -6px ${VIOLET}66` }}>{s.icon}</span>
               <p className="text-xs font-medium mb-1" style={{ color: MUTED }}>{s.label}</p>
               <p className="text-[28px] font-extrabold tabular-nums tracking-tight mb-1" style={{ color: INK }}>{s.value}</p>
-              <p className="text-xs">{changeLabel(s.change, s.suffix || '%', (s as any).lowerIsBetter)}</p>
+              <p className="text-xs">
+                {s.noChange !== undefined
+                  ? <span style={{ color: MUTED }}>{s.sub}</span>
+                  : changeLabel(s.change, s.suffix || '%', (s as any).lowerIsBetter)}
+              </p>
             </div>
           ))}
         </div>
@@ -297,6 +321,9 @@ export default function AnalyticsPage() {
                   <div className="flex items-center gap-2">
                     <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ background: `linear-gradient(135deg, ${rankColor}, ${rankColor}CC)`, boxShadow: `0 3px 8px -2px ${rankColor}66` }}>{i + 1}</span>
                     <span className="text-xs" style={{ color: INK }}>{d.name}</span>
+                    {d.avgRating !== null && (
+                      <span className="text-[10px] font-semibold" style={{ color: '#F5A623' }}>{d.avgRating} ★</span>
+                    )}
                   </div>
                   <span className="text-xs font-semibold" style={{ color: INK }}>{formatLakh(d.revenue)}</span>
                 </div>

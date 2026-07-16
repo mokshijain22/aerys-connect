@@ -6,9 +6,11 @@ import { autoAssignOverdueJobCards } from '../../lib/autoAssign';
 
 export const dynamic = 'force-dynamic';
 
+let lastAutoAssignRun = 0;
+
 export async function POST(request: Request) {
   const body = await request.json();
-  const { chassisNumber, complaintText, serviceType, partCategory, symptomType } = body;
+  const { chassisNumber, complaintText, serviceType, partCategory, symptomType, priority } = body;
 
   const session = await auth();
   const role = (session?.user as any)?.role || '';
@@ -43,9 +45,9 @@ export async function POST(request: Request) {
     }
 
     const [result]: any = await pool.query(
-      `INSERT INTO job_cards (vehicle_id, dealer_id, complaint_text, service_type, part_category, symptom_type, status)
-       VALUES (?, ?, ?, ?, ?, ?, 'registered')`,
-      [vehicle.vehicle_id, vehicle.dealer_id, complaintText, serviceType, partCategory || null, symptomType || null]
+      `INSERT INTO job_cards (vehicle_id, dealer_id, complaint_text, service_type, part_category, symptom_type, priority, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'registered')`,
+      [vehicle.vehicle_id, vehicle.dealer_id, complaintText, serviceType, partCategory || null, symptomType || null, priority || 'normal']
     );
 
     return NextResponse.json({ success: true, jobCardId: result.insertId });
@@ -60,15 +62,18 @@ export async function GET() {
   const dealerId = (session?.user as any)?.dealer_id || null;
   const userId = (session?.user as any)?.id || null;
 
-  await autoAssignOverdueJobCards();
-
-  await pool.query(
-    `UPDATE job_cards
-     SET escalated = 1, escalated_at = NOW()
-     WHERE escalated = 0
-       AND status NOT IN ('delivered', 'cancelled')
-       AND TIMESTAMPDIFF(MINUTE, registered_at, NOW()) > 360`
-  );
+  const now = Date.now();
+  if (now - lastAutoAssignRun > 60_000) {
+    lastAutoAssignRun = now;
+    autoAssignOverdueJobCards().catch((err) => console.error('autoAssign failed:', err));
+    pool.query(
+      `UPDATE job_cards
+       SET escalated = 1, escalated_at = NOW()
+       WHERE escalated = 0
+         AND status NOT IN ('delivered', 'cancelled')
+         AND TIMESTAMPDIFF(MINUTE, registered_at, NOW()) > 360`
+    ).catch((err) => console.error('escalation update failed:', err));
+  }
 
   let technicianRecordId: number | null = null;
   if (role === 'technician' && userId) {
@@ -82,7 +87,7 @@ export async function GET() {
   let query = `
     SELECT
       jc.job_card_id, jc.complaint_text, jc.status, jc.service_type,
-      jc.part_category, jc.symptom_type,
+      jc.part_category, jc.symptom_type, jc.priority,
       jc.registered_at, jc.escalated, jc.escalated_at, jc.arrived_at, jc.auto_assigned,
       v.chassis_number, c.full_name, c.phone,
       tu.full_name AS technician_name, tu.phone AS technician_phone,
@@ -107,7 +112,7 @@ export async function GET() {
     params.push(customerId || -1);
   }
 
-  query += ` ORDER BY jc.registered_at DESC`;
+  query += ` ORDER BY FIELD(jc.priority, 'emergency', 'urgent', 'normal'), jc.registered_at DESC`;
 
   const [rows] = await pool.query(query, params);
   return NextResponse.json({ success: true, data: rows });
