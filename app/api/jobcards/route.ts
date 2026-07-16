@@ -5,7 +5,7 @@ import { generateInvoiceForJobCard } from '../../lib/invoice';
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const { chassisNumber, complaintText, serviceType } = body;
+  const { chassisNumber, complaintText, serviceType, partCategory, symptomType } = body;
 
   const session = await auth();
   const role = (session?.user as any)?.role || '';
@@ -39,13 +39,13 @@ export async function POST(request: Request) {
       );
     }
 
-    await pool.query(
-      `INSERT INTO job_cards (vehicle_id, dealer_id, complaint_text, service_type, status)
-       VALUES (?, ?, ?, ?, 'registered')`,
-      [vehicle.vehicle_id, vehicle.dealer_id, complaintText, serviceType]
+    const [result]: any = await pool.query(
+      `INSERT INTO job_cards (vehicle_id, dealer_id, complaint_text, service_type, part_category, symptom_type, status)
+       VALUES (?, ?, ?, ?, ?, ?, 'registered')`,
+      [vehicle.vehicle_id, vehicle.dealer_id, complaintText, serviceType, partCategory || null, symptomType || null]
     );
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, jobCardId: result.insertId });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -77,12 +77,16 @@ export async function GET() {
   let query = `
     SELECT
       jc.job_card_id, jc.complaint_text, jc.status, jc.service_type,
+      jc.part_category, jc.symptom_type,
       jc.registered_at, jc.escalated, jc.escalated_at,
       v.chassis_number, c.full_name, c.phone,
+      tu.full_name AS technician_name, tu.phone AS technician_phone,
       TIMESTAMPDIFF(MINUTE, jc.registered_at, NOW()) AS minutes_elapsed
     FROM job_cards jc
     JOIN vehicles v ON jc.vehicle_id = v.vehicle_id
     JOIN customers c ON v.customer_id = c.customer_id
+    LEFT JOIN technicians t ON jc.technician_id = t.technician_id
+    LEFT JOIN users tu ON t.user_id = tu.user_id
   `;
   const params: any[] = [];
   const customerId = (session?.user as any)?.customer_id || null;

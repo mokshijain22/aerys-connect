@@ -38,6 +38,16 @@ const STATUS_COLOR: Record<string, string> = {
   delivered: MUTED,
 };
 
+const PART_CATEGORIES = ['Battery', 'Motor', 'Charger', 'Brakes', 'Electrical', 'Body', 'Tyres', 'Other'];
+const SYMPTOM_TYPES = [
+  'Not working / No power',
+  'Making unusual noise',
+  'Leaking / Overheating',
+  'Physical damage',
+  'Reduced performance (range/speed)',
+  'Other',
+];
+
 const NAV = NAV_ITEMS.map((item) => ({ ...item, active: item.href === '/jobcards' }));
 
 function formatElapsed(minutes: number) {
@@ -53,7 +63,8 @@ export default function JobCardsPage() {
   const { data: session } = useSession();
   const role = (session?.user as any)?.role || '';
 
-  const [form, setForm] = useState({ chassisNumber: '', complaintText: '', serviceType: 'paid' });
+  const [form, setForm] = useState({ chassisNumber: '', complaintText: '', serviceType: 'paid', partCategory: '', symptomType: '' });
+  const [photos, setPhotos] = useState<File[]>([]);
   const [message, setMessage] = useState('');
   const [jobCards, setJobCards] = useState<any[]>([]);
   const [technicians, setTechnicians] = useState<any[]>([]);
@@ -103,6 +114,17 @@ export default function JobCardsPage() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const combined = [...photos, ...files].slice(0, 5);
+    setPhotos(combined);
+    e.target.value = '';
+  };
+
+  const removePhoto = (index: number) => {
+    setPhotos(photos.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage('Saving...');
@@ -113,8 +135,20 @@ export default function JobCardsPage() {
     });
     const json = await res.json();
     if (json.success) {
+      if (photos.length > 0 && json.jobCardId) {
+        for (const photo of photos) {
+          const fd = new FormData();
+          fd.append('file', photo);
+          fd.append('stage', 'complaint');
+          await fetch(`/api/jobcards/${json.jobCardId}/attachments`, {
+            method: 'POST',
+            body: fd,
+          });
+        }
+      }
       setMessage('Job card created!');
-      setForm({ chassisNumber: '', complaintText: '', serviceType: 'paid' });
+      setForm({ chassisNumber: '', complaintText: '', serviceType: 'paid', partCategory: '', symptomType: '' });
+      setPhotos([]);
       setWarranty(null);
       loadJobCards();
     } else {
@@ -476,10 +510,44 @@ export default function JobCardsPage() {
                   <option value="warranty">Warranty claim</option>
                 </select>
               </div>
+
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Which part (optional)</label>
+                <select name="partCategory" value={form.partCategory} onChange={handleChange}
+                  className="w-full rounded-2xl px-4 py-3 text-sm outline-none" style={inputStyle} onFocus={inputFocus} onBlur={inputBlurH}>
+                  <option value="">Not sure / Other</option>
+                  {PART_CATEGORIES.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>What's the problem (optional)</label>
+                <select name="symptomType" value={form.symptomType} onChange={handleChange}
+                  className="w-full rounded-2xl px-4 py-3 text-sm outline-none" style={inputStyle} onFocus={inputFocus} onBlur={inputBlurH}>
+                  <option value="">Select symptom</option>
+                  {SYMPTOM_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Photos (optional, max 5)</label>
+                <input type="file" accept="image/*" multiple onChange={handlePhotoSelect} disabled={photos.length >= 5}
+                  className="w-full rounded-2xl px-4 py-3 text-sm outline-none" style={inputStyle} />
+                {photos.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {photos.map((p, i) => (
+                      <span key={i} className="text-xs px-3 py-1.5 rounded-full flex items-center gap-2" style={{ backgroundColor: VIOLET_DIM, color: VIOLET }}>
+                        {p.name.slice(0, 20)}
+                        <button type="button" onClick={() => removePhoto(i)} style={{ color: RED }}>✕</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex justify-end gap-3 mt-6">
-              <button type="button" onClick={() => setForm({ chassisNumber: '', complaintText: '', serviceType: 'paid' })}
+              <button type="button" onClick={() => { setForm({ chassisNumber: '', complaintText: '', serviceType: 'paid', partCategory: '', symptomType: '' }); setPhotos([]); }}
                 className="px-5 py-2.5 rounded-xl text-sm font-medium border" style={{ borderColor: BORDER, color: INK }}>
                 Reset
               </button>
@@ -516,7 +584,7 @@ export default function JobCardsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left" style={{ color: MUTED }}>
-                  {['Customer', 'Chassis No.', 'Complaint', 'Type', 'Status', 'Time elapsed', 'Action'].map((h) => (
+                  {['Customer', 'Chassis No.', 'Complaint', 'Type', 'Status', 'Time elapsed', 'Action', 'Details'].map((h) => (
                     <th key={h} className="px-5 py-2 font-medium text-xs">{h}</th>
                   ))}
                 </tr>
@@ -555,11 +623,16 @@ export default function JobCardsPage() {
                       <td className="px-5 py-3">
                         {renderActions(jc)}
                       </td>
+                      <td className="px-5 py-3">
+                        <a href={`/jobcards/${jc.job_card_id}`} className="text-xs font-semibold" style={{ color: VIOLET }}>
+                          View details →
+                        </a>
+                      </td>
                     </tr>
                   );
                 })}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={7} className="px-5 py-8 text-center text-sm" style={{ color: MUTED }}>No job cards found.</td></tr>
+                  <tr><td colSpan={8} className="px-5 py-8 text-center text-sm" style={{ color: MUTED }}>No job cards found.</td></tr>
                 )}
               </tbody>
             </table>
