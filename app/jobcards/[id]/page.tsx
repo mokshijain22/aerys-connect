@@ -58,6 +58,8 @@ export default function JobCardDetailPage() {
   }
 
   const complaintPhotos = jc.attachments.filter((a: any) => a.stage === 'complaint');
+  const arrivalPhotos = jc.attachments.filter((a: any) => a.stage === 'arrival');
+  const completionPhotos = jc.attachments.filter((a: any) => a.stage === 'completion');
 
   return (
     <div className="min-h-screen p-6" style={{ backgroundColor: '#FAFAFF', fontFamily: 'Inter, sans-serif' }}>
@@ -68,9 +70,16 @@ export default function JobCardDetailPage() {
       <div className="bg-white rounded-2xl border p-8 max-w-3xl" style={{ borderColor: BORDER }}>
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold" style={{ color: INK }}>Job Card #{jc.job_card_id}</h1>
-          <span className="text-xs font-semibold px-3 py-1.5 rounded-full" style={{ backgroundColor: VIOLET_DIM, color: VIOLET }}>
-            {STATUS_LABEL[jc.status] ?? jc.status}
-          </span>
+          <div className="flex items-center gap-2">
+            {jc.auto_assigned === 1 && (
+              <span className="text-xs font-semibold px-3 py-1.5 rounded-full" style={{ backgroundColor: 'rgba(245,166,35,0.12)', color: '#F5A623' }}>
+                ⚡ Auto-assigned
+              </span>
+            )}
+            <span className="text-xs font-semibold px-3 py-1.5 rounded-full" style={{ backgroundColor: VIOLET_DIM, color: VIOLET }}>
+              {STATUS_LABEL[jc.status] ?? jc.status}
+            </span>
+          </div>
         </div>
 
         <dl className="grid grid-cols-2 gap-4 text-sm mb-6">
@@ -118,6 +127,33 @@ export default function JobCardDetailPage() {
           </div>
         )}
 
+        {arrivalPhotos.length > 0 && (
+          <div className="mb-6">
+            <dt className="text-sm mb-2" style={{ color: MUTED }}>Technician arrival photo</dt>
+            <div className="flex flex-wrap gap-3">
+              {arrivalPhotos.map((p: any) => (
+                <a key={p.attachment_id} href={p.file_path} target="_blank" rel="noopener noreferrer">
+                  <img src={p.file_path} alt="arrival" className="w-24 h-24 object-cover rounded-xl border" style={{ borderColor: BORDER }} />
+                </a>
+              ))}
+            </div>
+            {jc.arrived_at && <p className="text-xs mt-1" style={{ color: MUTED }}>Arrived: {fmt(jc.arrived_at)}</p>}
+          </div>
+        )}
+
+        {completionPhotos.length > 0 && (
+          <div className="mb-6">
+            <dt className="text-sm mb-2" style={{ color: MUTED }}>Completion photo</dt>
+            <div className="flex flex-wrap gap-3">
+              {completionPhotos.map((p: any) => (
+                <a key={p.attachment_id} href={p.file_path} target="_blank" rel="noopener noreferrer">
+                  <img src={p.file_path} alt="completion" className="w-24 h-24 object-cover rounded-xl border" style={{ borderColor: BORDER }} />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
         {jc.technician_name && ['in_progress', 'completed', 'delivered'].includes(jc.status) && (
           <div className="mb-6 rounded-xl p-4" style={{ backgroundColor: VIOLET_DIM }}>
             <p className="text-sm font-semibold mb-1" style={{ color: VIOLET }}>Assigned Technician</p>
@@ -139,6 +175,7 @@ export default function JobCardDetailPage() {
             <p>Acknowledged: {fmt(jc.acknowledged_at)}</p>
             <p>Technician assigned: {fmt(jc.technician_assigned_at)}</p>
             <p>Service started: {fmt(jc.service_started_at)}</p>
+            <p>Technician arrived: {fmt(jc.arrived_at)}</p>
             <p>Service completed: {fmt(jc.service_completed_at)}</p>
             <p>Delivered: {fmt(jc.delivered_at)}</p>
           </div>

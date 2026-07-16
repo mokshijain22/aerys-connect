@@ -73,6 +73,8 @@ export default function JobCardsPage() {
   const [warrantyError, setWarrantyError] = useState('');
   const [search, setSearch] = useState('');
   const [actionMessage, setActionMessage] = useState('');
+  const [arrivalUploading, setArrivalUploading] = useState<number | null>(null);
+  const [completeUploading, setCompleteUploading] = useState<number | null>(null);
 
   const loadJobCards = async () => {
     const res = await fetch('/api/jobcards');
@@ -226,6 +228,44 @@ export default function JobCardsPage() {
     loadJobCards();
   };
 
+  const handleArrivalUpload = async (jobCardId: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setArrivalUploading(jobCardId);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`/api/jobcards/${jobCardId}/arrival`, { method: 'POST', body: fd });
+      const json = await res.json();
+      if (!json.success) setActionMessage('Error: ' + (json.error || 'Failed to log arrival'));
+      loadJobCards();
+    } catch (err) {
+      setActionMessage('Network error — try again');
+    } finally {
+      setArrivalUploading(null);
+    }
+  };
+
+  const handleCompleteUpload = async (jobCardId: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setCompleteUploading(jobCardId);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`/api/jobcards/${jobCardId}/complete`, { method: 'POST', body: fd });
+      const json = await res.json();
+      if (!json.success) setActionMessage('Error: ' + (json.error || 'Failed to mark complete'));
+      loadJobCards();
+    } catch (err) {
+      setActionMessage('Network error — try again');
+    } finally {
+      setCompleteUploading(null);
+    }
+  };
+
   const filtered = jobCards.filter((jc) =>
     jc.full_name?.toLowerCase().includes(search.toLowerCase()) ||
     jc.chassis_number?.toLowerCase().includes(search.toLowerCase()) ||
@@ -303,7 +343,10 @@ export default function JobCardsPage() {
           </a>
         );
       }
-      // completed/in_progress -> normal advance (e.g. mark delivered)
+      if (jc.status === 'in_progress') {
+        return <span className="text-xs" style={{ color: MUTED }}>Technician is working on this job...</span>;
+      }
+      // completed -> normal advance (e.g. mark delivered)
       const nextIndex = STATUS_FLOW.indexOf(jc.status) + 1;
       const nextStatus = STATUS_FLOW[nextIndex];
       if (nextStatus) {
@@ -334,19 +377,25 @@ export default function JobCardsPage() {
           </div>
         );
       }
-      if (jc.status === 'in_progress' || jc.status === 'completed') {
-        const nextIndex = STATUS_FLOW.indexOf(jc.status) + 1;
-        const nextStatus = STATUS_FLOW[nextIndex];
-        if (nextStatus === 'delivered') return null; // technicians can't mark delivered
-        if (nextStatus) {
+      if (jc.status === 'in_progress') {
+        if (!jc.arrived_at) {
           return (
-            <button onClick={() => advanceStatus(jc.job_card_id, jc.status)}
-              className="text-xs font-medium px-3 py-1.5 rounded-lg border"
-              style={{ borderColor: VIOLET, color: VIOLET }}>
-              Move to: {STATUS_LABEL[nextStatus]} →
-            </button>
+            <label className="text-xs font-medium px-3 py-1.5 rounded-lg text-white cursor-pointer inline-block" style={{ backgroundColor: VIOLET }}>
+              {arrivalUploading === jc.job_card_id ? 'Uploading...' : "📍 I've arrived"}
+              <input type="file" accept="image/*" capture="environment" className="hidden"
+                disabled={arrivalUploading === jc.job_card_id}
+                onChange={(e) => handleArrivalUpload(jc.job_card_id, e)} />
+            </label>
           );
         }
+        return (
+          <label className="text-xs font-medium px-3 py-1.5 rounded-lg text-white cursor-pointer inline-block" style={{ backgroundColor: GREEN }}>
+            {completeUploading === jc.job_card_id ? 'Uploading...' : '✅ Mark complete'}
+            <input type="file" accept="image/*" capture="environment" className="hidden"
+              disabled={completeUploading === jc.job_card_id}
+              onChange={(e) => handleCompleteUpload(jc.job_card_id, e)} />
+          </label>
+        );
       }
       return null;
     }
@@ -461,6 +510,7 @@ export default function JobCardsPage() {
         </div>
 
         {/* Create form */}
+        {role !== 'technician' && (
         <div className="rounded-[20px] p-7 bg-white border mb-8 fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
           <div className="flex items-center gap-3 mb-6">
             <span
@@ -560,6 +610,7 @@ export default function JobCardsPage() {
             {message && <p className="text-sm mt-3" style={{ color: message.startsWith('Error') ? RED : GREEN }}>{message}</p>}
           </form>
         </div>
+        )}
 
         {/* Table */}
         <div className="rounded-[20px] bg-white border overflow-hidden fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
@@ -615,6 +666,9 @@ export default function JobCardsPage() {
                           <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: STATUS_COLOR[jc.status] }} />
                           {STATUS_LABEL[jc.status] ?? jc.status}
                         </span>
+                        {jc.auto_assigned === 1 && (
+                          <p className="text-[10px] font-semibold mt-1" style={{ color: '#F5A623' }}>⚡ Auto-assigned</p>
+                        )}
                       </td>
                       <td className="px-5 py-3">
                         <p style={{ color: isOverSla ? RED : INK }} className="text-xs font-medium">{formatElapsed(jc.minutes_elapsed)}</p>

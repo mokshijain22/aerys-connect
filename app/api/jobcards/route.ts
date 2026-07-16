@@ -2,6 +2,9 @@ import { pool } from '../../lib/db';
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { generateInvoiceForJobCard } from '../../lib/invoice';
+import { autoAssignOverdueJobCards } from '../../lib/autoAssign';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   const body = await request.json();
@@ -57,6 +60,8 @@ export async function GET() {
   const dealerId = (session?.user as any)?.dealer_id || null;
   const userId = (session?.user as any)?.id || null;
 
+  await autoAssignOverdueJobCards();
+
   await pool.query(
     `UPDATE job_cards
      SET escalated = 1, escalated_at = NOW()
@@ -78,7 +83,7 @@ export async function GET() {
     SELECT
       jc.job_card_id, jc.complaint_text, jc.status, jc.service_type,
       jc.part_category, jc.symptom_type,
-      jc.registered_at, jc.escalated, jc.escalated_at,
+      jc.registered_at, jc.escalated, jc.escalated_at, jc.arrived_at, jc.auto_assigned,
       v.chassis_number, c.full_name, c.phone,
       tu.full_name AS technician_name, tu.phone AS technician_phone,
       TIMESTAMPDIFF(MINUTE, jc.registered_at, NOW()) AS minutes_elapsed

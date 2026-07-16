@@ -23,9 +23,9 @@ export async function GET(
       `SELECT
         jc.job_card_id, jc.complaint_text, jc.status, jc.service_type,
         jc.part_category, jc.symptom_type,
-        jc.registered_at, jc.acknowledged_at, jc.technician_assigned_at,
+        jc.registered_at, jc.acknowledged_at, jc.technician_assigned_at, jc.arrived_at,
         jc.service_started_at, jc.service_completed_at, jc.delivered_at,
-        jc.dealer_rejection_reason, jc.escalated,
+        jc.dealer_rejection_reason, jc.escalated, jc.auto_assigned,
         jc.dealer_id, jc.technician_id,
         v.chassis_number, v.vehicle_id, c.full_name, c.phone, c.customer_id,
         d.dealer_name, d.phone AS dealer_phone,
