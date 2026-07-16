@@ -83,7 +83,7 @@ export async function GET(request: Request) {
       else if (row.status === 'cancelled') statusMap.Cancelled += row.count;
     }
 
-    const [[serviceTypeRawRows], [partRows], [revenueTrendRows], [dealerRevenueRows]] = await Promise.all([
+    const [[serviceTypeRawRows], [partRows], [revenueTrendRows], [dealerRevenueRows], [technicianRatingRows]] = await Promise.all([
       pool.query(
         `SELECT service_type, COUNT(*) AS count
          FROM job_cards
@@ -124,6 +124,18 @@ export async function GET(request: Request) {
         ORDER BY revenue DESC
         LIMIT 5
       `, [`${from} 00:00:00`, `${to} 23:59:59`, `${from} 00:00:00`, `${to} 23:59:59`]),
+      pool.query(`
+        SELECT t.technician_id, u.full_name AS technician_name,
+               AVG(jcr.rating) AS avg_rating, COUNT(jcr.rating) AS rating_count
+        FROM job_card_reviews jcr
+        JOIN job_cards jc ON jcr.job_card_id = jc.job_card_id
+        JOIN technicians t ON jc.technician_id = t.technician_id
+        JOIN users u ON t.user_id = u.user_id
+        WHERE jcr.reviewer_role = 'dealer' AND jc.registered_at BETWEEN ? AND ?
+        GROUP BY t.technician_id
+        ORDER BY avg_rating DESC
+        LIMIT 5
+      `, [`${from} 00:00:00`, `${to} 23:59:59`]),
     ]) as any;
 
     const topIssueCategories = serviceTypeRawRows.map((r: any) => ({ label: r.service_type, count: r.count }));
@@ -149,6 +161,12 @@ export async function GET(request: Request) {
         name: r.dealer_name,
         revenue: r.revenue || 0,
         avgRating: r.avg_rating ? Number(Number(r.avg_rating).toFixed(1)) : null,
+      })),
+      topTechnicians: technicianRatingRows.map((r: any) => ({
+        id: r.technician_id,
+        name: r.technician_name,
+        avgRating: r.avg_rating ? Number(Number(r.avg_rating).toFixed(1)) : null,
+        ratingCount: r.rating_count,
       })),
     };
 

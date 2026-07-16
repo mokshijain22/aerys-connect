@@ -43,6 +43,7 @@ type AnalyticsData = {
   jobsByServiceType: { label: string; count: number }[];
   revenueTrend: { day: string; revenue: number }[];
   topDealers: { id: number; name: string; revenue: number; avgRating: number | null }[];
+  topTechnicians: { id: number; name: string; avgRating: number | null; ratingCount: number }[];
   topIssueCategories: { label: string; count: number }[];
 };
 
@@ -330,6 +331,31 @@ export default function AnalyticsPage() {
               );
             })}
             <Link href="/dealers" className="text-xs font-semibold transition-transform inline-flex items-center gap-1 hover:gap-1.5" style={{ color: VIOLET }}>View All Dealers →</Link>
+          </div>
+        </div>
+
+        {/* Top technicians by rating */}
+        <div className="grid grid-cols-1 gap-4 mb-6">
+          <div className="rounded-[20px] p-6 bg-white border fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+            <p className="font-bold text-[15px] mb-5" style={{ color: INK }}>Top Performing Technicians (by dealer rating)</p>
+            {data?.topTechnicians.length === 0 && <p className="text-xs" style={{ color: MUTED }}>No rated technicians for this range.</p>}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+              {data?.topTechnicians.map((t, i) => {
+                const rankColor = i === 0 ? ORANGE : i === 1 ? MUTED : i === 2 ? '#B08D57' : VIOLET;
+                return (
+                  <div key={t.id} className="rounded-2xl p-4 border" style={{ borderColor: BORDER }}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0" style={{ background: `linear-gradient(135deg, ${rankColor}, ${rankColor}CC)`, boxShadow: `0 3px 8px -2px ${rankColor}66` }}>{i + 1}</span>
+                      <span className="text-xs font-semibold truncate" style={{ color: INK }}>{t.name}</span>
+                    </div>
+                    <p className="text-lg font-extrabold" style={{ color: INK }}>
+                      {t.avgRating ?? '—'} <span className="text-xs font-normal" style={{ color: '#F5A623' }}>★</span>
+                    </p>
+                    <p className="text-[10px]" style={{ color: MUTED }}>{t.ratingCount} review{t.ratingCount === 1 ? '' : 's'}</p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
