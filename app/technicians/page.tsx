@@ -151,10 +151,10 @@ export default function TechniciansPage() {
             <span className="font-semibold" style={{ color: VIOLET }}>Technicians</span>
           </div>
 
-          <div className="rounded-[20px] p-7 mb-6 relative overflow-hidden fade-up" style={{ background: `linear-gradient(135deg, ${VIOLET_DIM}, rgba(245,166,35,0.05))`, border: `1px solid ${BORDER}`, boxShadow: CARD_SHADOW }}>
-            <h1 className="text-[28px] font-extrabold tracking-tight" style={{ color: INK }}>Technicians</h1>
+          <div className="rounded-[20px] p-7 mb-6 relative overflow-hidden fade-up flex flex-col sm:flex-row sm:items-center sm:justify-between" style={{ background: `linear-gradient(135deg, ${VIOLET_DIM}, rgba(245,166,35,0.05))`, border: `1px solid ${BORDER}`, boxShadow: CARD_SHADOW }}>
+            <h1 className="text-[28px] sm:text-[32px] font-extrabold tracking-tight" style={{ color: INK }}>Technicians</h1>
             <button onClick={() => setShowAddModal(true)}
-              className="text-sm font-semibold text-white px-5 py-2.5 rounded-xl absolute top-7 right-7 transition-all duration-200 hover:-translate-y-0.5"
+              className="text-sm font-semibold text-white px-5 py-2.5 rounded-xl mt-4 sm:mt-0 transition-all duration-200 hover:-translate-y-0.5"
               style={{ background: `linear-gradient(135deg, ${VIOLET_LIGHT}, ${VIOLET})`, boxShadow: `0 6px 16px -6px ${VIOLET}66` }}>
               + Add Technician
             </button>
