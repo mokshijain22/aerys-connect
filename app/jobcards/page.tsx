@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 import { ResponsiveLayout } from '@/app/components/ResponsiveLayout';
@@ -77,6 +77,14 @@ export default function JobCardsPage() {
   const [actionMessage, setActionMessage] = useState('');
   const [arrivalUploading, setArrivalUploading] = useState<number | null>(null);
   const [completeUploading, setCompleteUploading] = useState<number | null>(null);
+  const [deliveryModal, setDeliveryModal] = useState<{ jobCardId: number } | null>(null);
+  const [deliveryStep, setDeliveryStep] = useState<'generate' | 'confirm'>('generate');
+  const [otpDisplay, setOtpDisplay] = useState('');
+  const [otpInput, setOtpInput] = useState('');
+  const [deliveryError, setDeliveryError] = useState('');
+  const [deliverySubmitting, setDeliverySubmitting] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const drawingRef = useRef(false);
 
   const loadJobCards = async () => {
     const res = await fetch('/api/jobcards');
@@ -249,6 +257,115 @@ export default function JobCardsPage() {
     }
   };
 
+  const openDeliveryModal = (jobCardId: number) => {
+    setDeliveryModal({ jobCardId });
+    setDeliveryStep('generate');
+    setOtpDisplay('');
+    setOtpInput('');
+    setDeliveryError('');
+  };
+
+  const closeDeliveryModal = () => {
+    setDeliveryModal(null);
+  };
+
+  const generateOtp = async () => {
+    if (!deliveryModal) return;
+    setDeliverySubmitting(true);
+    setDeliveryError('');
+    try {
+      const res = await fetch(`/api/jobcards/${deliveryModal.jobCardId}/delivery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'generate' }),
+      });
+      const json = await res.json();
+      if (!json.success) { setDeliveryError(json.error || 'Failed to generate OTP'); return; }
+      setOtpDisplay(json.otp);
+      setDeliveryStep('confirm');
+    } catch {
+      setDeliveryError('Network error — try again');
+    } finally {
+      setDeliverySubmitting(false);
+    }
+  };
+
+  const clearSignature = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx?.clearRect(0, 0, canvas.width, canvas.height);
+  };
+
+  const getCanvasPos = (e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect();
+    const point = 'touches' in e ? e.touches[0] : e;
+    return { x: point.clientX - rect.left, y: point.clientY - rect.top };
+  };
+
+  const handleDrawStart = (e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    drawingRef.current = true;
+    const ctx = canvas.getContext('2d');
+    const { x, y } = getCanvasPos(e, canvas);
+    ctx?.beginPath();
+    ctx?.moveTo(x, y);
+  };
+
+  const handleDrawMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!drawingRef.current) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const { x, y } = getCanvasPos(e, canvas);
+    if (ctx) {
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = '#1A1A2E';
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    }
+  };
+
+  const handleDrawEnd = () => {
+    drawingRef.current = false;
+  };
+
+  const submitDelivery = async () => {
+    if (!deliveryModal) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    setDeliveryError('');
+    if (!otpInput.trim()) { setDeliveryError('Enter the OTP'); return; }
+
+    const blank = document.createElement('canvas');
+    blank.width = canvas.width;
+    blank.height = canvas.height;
+    if (canvas.toDataURL() === blank.toDataURL()) {
+      setDeliveryError('Customer signature is required');
+      return;
+    }
+
+    setDeliverySubmitting(true);
+    try {
+      const signatureDataUrl = canvas.toDataURL('image/png');
+      const res = await fetch(`/api/jobcards/${deliveryModal.jobCardId}/delivery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'confirm', otp: otpInput.trim(), signatureDataUrl }),
+      });
+      const json = await res.json();
+      if (!json.success) { setDeliveryError(json.error || 'Failed to confirm delivery'); return; }
+      closeDeliveryModal();
+      loadJobCards();
+    } catch {
+      setDeliveryError('Network error — try again');
+    } finally {
+      setDeliverySubmitting(false);
+    }
+  };
+
   const handleCompleteUpload = async (jobCardId: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -330,10 +447,10 @@ export default function JobCardsPage() {
       }
       if (jc.status === 'completed') {
         return (
-          <button onClick={() => advanceStatus(jc.job_card_id, jc.status)}
+          <button onClick={() => openDeliveryModal(jc.job_card_id)}
             className="text-xs font-medium px-3 py-1.5 rounded-lg border"
             style={{ borderColor: VIOLET, color: VIOLET }}>
-            Move to: Delivered →
+            Verify & deliver →
           </button>
         );
       }
@@ -716,6 +833,79 @@ export default function JobCardsPage() {
             Showing {filtered.length} of {jobCards.length} entries
           </div>
         </div>
+
+        {deliveryModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}>
+            <div className="bg-white rounded-[20px] p-7 w-full max-w-md" style={{ boxShadow: CARD_SHADOW_HOVER }}>
+              <div className="flex items-center justify-between mb-4">
+                <p className="font-bold text-lg" style={{ color: INK }}>Confirm delivery</p>
+                <button onClick={closeDeliveryModal} style={{ color: MUTED }}>✕</button>
+              </div>
+
+              {deliveryStep === 'generate' && (
+                <>
+                  <p className="text-sm mb-5" style={{ color: MUTED }}>
+                    Generate a one-time code to confirm this vehicle is being handed over to the customer.
+                  </p>
+                  {deliveryError && <p className="text-sm mb-3" style={{ color: RED }}>{deliveryError}</p>}
+                  <button onClick={generateOtp} disabled={deliverySubmitting}
+                    className="w-full text-sm font-semibold text-white px-5 py-2.5 rounded-xl disabled:opacity-50"
+                    style={{ background: `linear-gradient(135deg, ${VIOLET_LIGHT}, ${VIOLET})` }}>
+                    {deliverySubmitting ? 'Generating...' : 'Generate delivery OTP'}
+                  </button>
+                </>
+              )}
+
+              {deliveryStep === 'confirm' && (
+                <>
+                  <div className="rounded-xl p-3 mb-4 text-center" style={{ backgroundColor: VIOLET_DIM }}>
+                    <p className="text-xs mb-1" style={{ color: MUTED }}>Share this code with the customer</p>
+                    <p className="text-2xl font-bold tracking-[0.3em]" style={{ color: VIOLET }}>{otpDisplay}</p>
+                    <p className="text-[10px] mt-1" style={{ color: MUTED }}>Valid for 10 minutes</p>
+                  </div>
+
+                  <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Enter OTP to confirm</label>
+                  <input value={otpInput} onChange={(e) => setOtpInput(e.target.value)} maxLength={6}
+                    placeholder="6-digit code"
+                    className="w-full rounded-xl px-4 py-2.5 text-sm outline-none mb-4"
+                    style={{ border: `1px solid ${BORDER}` }} />
+
+                  <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Customer signature</label>
+                  <canvas
+                    ref={canvasRef}
+                    width={380}
+                    height={140}
+                    className="w-full rounded-xl border touch-none"
+                    style={{ borderColor: BORDER, backgroundColor: '#FAFAFF' }}
+                    onMouseDown={handleDrawStart}
+                    onMouseMove={handleDrawMove}
+                    onMouseUp={handleDrawEnd}
+                    onMouseLeave={handleDrawEnd}
+                    onTouchStart={handleDrawStart}
+                    onTouchMove={handleDrawMove}
+                    onTouchEnd={handleDrawEnd}
+                  />
+                  <button type="button" onClick={clearSignature} className="text-xs font-medium mt-1.5" style={{ color: MUTED }}>
+                    Clear signature
+                  </button>
+
+                  {deliveryError && <p className="text-sm mt-3" style={{ color: RED }}>{deliveryError}</p>}
+
+                  <div className="flex justify-end gap-3 mt-5">
+                    <button type="button" onClick={closeDeliveryModal} className="text-sm font-medium px-4 py-2 rounded-xl" style={{ color: MUTED }}>
+                      Cancel
+                    </button>
+                    <button onClick={submitDelivery} disabled={deliverySubmitting}
+                      className="text-sm font-semibold text-white px-5 py-2 rounded-xl disabled:opacity-50"
+                      style={{ background: `linear-gradient(135deg, ${VIOLET_LIGHT}, ${VIOLET})` }}>
+                      {deliverySubmitting ? 'Confirming...' : 'Confirm delivery'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </ResponsiveLayout>
     </>

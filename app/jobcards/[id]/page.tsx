@@ -226,6 +226,13 @@ export default function JobCardDetailPage() {
           </div>
         </div>
 
+        {jc.status === 'delivered' && jc.signature_path && (
+          <div className="pt-4 border-t mt-4" style={{ borderColor: BORDER }}>
+            <p className="text-sm font-semibold mb-3" style={{ color: INK }}>Customer signature</p>
+            <img src={jc.signature_path} alt="Customer signature" className="rounded-xl border max-w-xs" style={{ borderColor: BORDER, backgroundColor: '#FAFAFF' }} />
+          </div>
+        )}
+
         {jc.status === 'delivered' && ['customer', 'technician', 'dealer'].includes(role) && (
           <div className="pt-4 border-t mt-4" style={{ borderColor: BORDER }}>
             <p className="text-sm font-semibold mb-3" style={{ color: INK }}>{REVIEW_LABELS[role]}</p>

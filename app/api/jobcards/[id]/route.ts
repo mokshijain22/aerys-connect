@@ -26,7 +26,7 @@ export async function GET(
         jc.registered_at, jc.acknowledged_at, jc.technician_assigned_at, jc.arrived_at,
         jc.service_started_at, jc.service_completed_at, jc.delivered_at,
         jc.dealer_rejection_reason, jc.escalated, jc.auto_assigned,
-        jc.dealer_id, jc.technician_id,
+        jc.dealer_id, jc.technician_id, jc.signature_path,
         v.chassis_number, v.vehicle_id, c.full_name, c.phone, c.customer_id,
         d.dealer_name, d.phone AS dealer_phone,
         tu.full_name AS technician_name, tu.phone AS technician_phone

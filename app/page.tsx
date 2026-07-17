@@ -8,6 +8,7 @@ import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { ResponsiveLayout } from '@/app/components/ResponsiveLayout';
 import { NAV_ITEMS } from '@/app/lib/nav-items';
 import { FiTruck, FiClipboard, FiShield, FiBarChart2 } from 'react-icons/fi';
+import { CountUp } from '@/app/components/CountUp';
 
 const VIOLET = '#6C5CE7';
 const VIOLET_LIGHT = '#8B7CF8';
@@ -269,7 +270,13 @@ export default function Home() {
           <ScooterPanel />
 
           {/* Stat cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
+          <motion.div
+            className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-6"
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: '-60px' }}
+            variants={{ hidden: {}, show: { transition: { staggerChildren: 0.1 } } }}
+          >
             {[
               ...(role === 'technician'
                 ? [{ label: 'Assigned Jobs', value: stats?.activeJobs, icon: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z M14 2v6h6', accent: VIOLET }]
@@ -282,9 +289,10 @@ export default function Home() {
               const isWarnActive = c.warn && (c.value ?? 0) > 0;
               const accentColor = isWarnActive ? WARN : (c.accent ?? VIOLET);
               return (
-                <div
+                <motion.div
                   key={c.label}
-                  className="group relative rounded-[20px] p-6 border overflow-hidden transition-all duration-200 fade-up"
+                  variants={{ hidden: { opacity: 0, y: 25, scale: 0.97 }, show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } } }}
+                  className="group relative rounded-[20px] p-6 border overflow-hidden transition-all duration-200"
                   style={{ borderColor: BORDER, boxShadow: CARD_SHADOW, background: `linear-gradient(160deg, #fff 65%, ${accentColor}0d 100%)` }}
                   onMouseEnter={(e) => { e.currentTarget.style.boxShadow = CARD_SHADOW_HOVER; e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.borderColor = `${accentColor}55`; }}
                   onMouseLeave={(e) => { e.currentTarget.style.boxShadow = CARD_SHADOW; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = BORDER; }}
@@ -301,15 +309,15 @@ export default function Home() {
                     </span>
                   </div>
                   <p className="relative text-[28px] font-extrabold tabular-nums tracking-tight mb-3" style={{ color: isWarnActive ? WARN : INK }}>
-                    {loading ? '—' : (c.value ?? 0)}
+                    {loading ? '—' : <CountUp value={c.value ?? 0} />}
                   </p>
                   <div className="relative h-1 rounded-full overflow-hidden" style={{ backgroundColor: `${accentColor}1A` }}>
                     <div className="h-full rounded-full transition-all duration-700" style={{ width: loading ? '0%' : '58%', background: `linear-gradient(90deg, ${accentColor}CC, ${accentColor})` }} />
                   </div>
-                </div>
+                </motion.div>
               );
             })}
-          </div>
+          </motion.div>
 
           {/* Today's operations / Recent activity / Quick actions */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
