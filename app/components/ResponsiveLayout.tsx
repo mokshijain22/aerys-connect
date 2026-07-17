@@ -154,10 +154,10 @@ export function ResponsiveLayout({ navItems, children, sidebarFooter }: Responsi
               key={item.label}
               href={item.href}
               onClick={closeSidebar}
-              className="group flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-sm relative transition-all duration-200"
+              className="group flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] relative transition-all duration-200"
               style={
                 item.active
-                  ? { background: `linear-gradient(135deg, ${VIOLET_LIGHT}, ${VIOLET})`, color: '#fff', fontWeight: 600, boxShadow: `0 8px 20px -8px ${VIOLET}88` }
+                  ? { backgroundColor: '#F0EDFF', color: VIOLET, fontWeight: 700 }
                   : { color: MUTED }
               }
               onMouseEnter={(e) => { if (!item.active) { e.currentTarget.style.backgroundColor = VIOLET_DIM; e.currentTarget.style.color = VIOLET; e.currentTarget.style.transform = 'translateX(2px)'; } }}
@@ -171,7 +171,7 @@ export function ResponsiveLayout({ navItems, children, sidebarFooter }: Responsi
               )}
               <svg
                 width="18" height="18" viewBox="0 0 24 24" fill="none"
-                stroke={item.active ? '#fff' : 'currentColor'} strokeWidth="1.8"
+                stroke={item.active ? VIOLET : 'currentColor'} strokeWidth="1.8"
                 strokeLinecap="round" strokeLinejoin="round" className="shrink-0 transition-transform duration-200 group-hover:scale-110"
               >
                 <path d={NAV_ICONS[item.href] ?? NAV_ICONS['/settings']} />
@@ -184,32 +184,46 @@ export function ResponsiveLayout({ navItems, children, sidebarFooter }: Responsi
         {/* Sidebar footer content */}
         {sidebarFooter && <div className="mt-4">{sidebarFooter}</div>}
 
-        {/* Sign out button */}
-        <button
-          onClick={() => {
-            signOut({ redirectTo: '/login' });
-            closeSidebar();
-          }}
-          className="w-full px-3 py-2.5 rounded-xl text-sm transition-colors text-left mt-4"
-          style={{ color: MUTED }}
-        >
-          Sign out
-        </button>
+        {/* Admin profile block */}
+        <div className="mt-4 pt-4 border-t" style={{ borderColor: BORDER }}>
+          <div className="flex items-center gap-2.5 px-2 py-2 rounded-xl">
+            <span
+              className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold text-white shrink-0"
+              style={{ background: `linear-gradient(135deg, ${VIOLET_LIGHT}, ${VIOLET})` }}
+            >
+              {(user?.name || 'A').charAt(0).toUpperCase()}
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold truncate" style={{ color: INK }}>{user?.name || 'Admin User'}</p>
+              <p className="text-[11px] truncate capitalize" style={{ color: MUTED }}>{(role || 'super_admin').replace('_', ' ')}</p>
+            </div>
+            <button
+              onClick={() => { signOut({ redirectTo: '/login' }); closeSidebar(); }}
+              title="Sign out"
+              className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:bg-[rgba(226,75,74,0.08)]"
+              style={{ color: MUTED }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+              </svg>
+            </button>
+          </div>
+        </div>
       </aside>
 
       {/* Main content area */}
       <main className="flex-1 min-w-0 overflow-auto pt-20 md:pt-0 flex flex-col">
         {/* Top bar */}
         <div
-          className="hidden md:flex items-center justify-between gap-4 px-6 py-3.5 sticky top-0 z-10 mx-4 mt-3 rounded-2xl border"
+          className="hidden md:flex items-center justify-between gap-4 px-6 sticky top-0 z-10 mx-7 mt-4 rounded-2xl"
           style={{
-            borderColor: BORDER,
-            background: 'rgba(255,255,255,0.72)',
-            backdropFilter: 'blur(14px)',
-            boxShadow: CARD_SHADOW,
+            height: 68,
+            background: '#fff',
+            border: 'none',
+            boxShadow: '0 2px 10px -4px rgba(20,10,50,0.08)',
           }}
         >
-          <div className="relative flex-1 max-w-md" ref={searchRef}>
+          <div className="relative" style={{ flex: '0 0 350px', maxWidth: 350 }} ref={searchRef}>
             <svg
               width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2"
               className="absolute left-4 top-1/2 -translate-y-1/2"
@@ -223,7 +237,7 @@ export function ResponsiveLayout({ navItems, children, sidebarFooter }: Responsi
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => setIsSearchFocused(true)}
               onKeyDown={(e) => { if (e.key === 'Enter' && searchResults.length > 0) goToResult(searchResults[0].href); }}
-              className="w-full rounded-full pl-11 pr-14 py-2.5 text-sm outline-none border transition-all focus:shadow-md"
+              className="w-full rounded-full pl-11 pr-14 py-2.5 text-sm outline-none border transition-all focus:shadow-sm"
               style={{ borderColor: BORDER, color: INK, backgroundColor: '#fff' }}
             />
             {!searchQuery && (
@@ -257,7 +271,7 @@ export function ResponsiveLayout({ navItems, children, sidebarFooter }: Responsi
             )}
           </div>
 
-          <div className="flex items-center gap-4 shrink-0">
+          <div className="flex items-center gap-5 shrink-0 ml-auto">
             <div className="relative" ref={notifRef}>
               <button
                 onClick={() => { setIsNotifOpen((v) => !v); setIsMailOpen(false); setIsUserOpen(false); }}

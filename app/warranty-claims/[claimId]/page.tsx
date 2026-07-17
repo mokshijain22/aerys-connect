@@ -154,7 +154,7 @@ export default function ClaimDetailPage() {
           </span>
         </div>
 
-        <dl className="grid grid-cols-2 gap-4 text-sm mb-6">
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-6">
           <div>
             <dt className="text-slate-400">Chassis number</dt>
             <dd className="text-slate-700">{claim.chassis_number}</dd>

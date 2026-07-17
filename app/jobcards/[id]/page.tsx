@@ -127,7 +127,7 @@ export default function JobCardDetailPage() {
           </div>
         </div>
 
-        <dl className="grid grid-cols-2 gap-4 text-sm mb-6">
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-6">
           <div>
             <dt style={{ color: MUTED }}>Customer</dt>
             <dd style={{ color: INK }}>{jc.full_name} · {jc.phone}</dd>

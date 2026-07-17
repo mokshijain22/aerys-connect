@@ -1,5 +1,5 @@
 export const NAV_ITEMS = [
-  { label: 'Home', href: '/' },
+  { label: 'Dashboard', href: '/' },
   { label: 'Vehicle Registration', href: '/vehicles' },
   { label: 'Job Cards / Complaints', href: '/jobcards' },
   { label: 'Warranty Claims', href: '/warranty-claims' },

@@ -46,7 +46,7 @@ export default function PublicVehiclePage() {
         <p className="text-xs font-medium mb-1" style={{ color: VIOLET }}>AERYS SERVICE CONNECT</p>
         <h1 className="text-xl font-bold mb-4" style={{ color: INK }}>{data.model}</h1>
 
-        <div className="grid grid-cols-2 gap-4 text-sm mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-5">
           <div>
             <p className="text-xs" style={{ color: MUTED }}>Chassis number</p>
             <p style={{ color: INK }}>{data.chassisNumber}</p>
