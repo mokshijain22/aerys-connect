@@ -71,6 +71,7 @@ export default function JobCardsPage() {
   const [jobCards, setJobCards] = useState<any[]>([]);
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [selectedTech, setSelectedTech] = useState<Record<number, string>>({});
+  const [myVehicles, setMyVehicles] = useState<any[]>([]);
   const [warranty, setWarranty] = useState<any>(null);
   const [warrantyError, setWarrantyError] = useState('');
   const [search, setSearch] = useState('');
@@ -78,11 +79,15 @@ export default function JobCardsPage() {
   const [arrivalUploading, setArrivalUploading] = useState<number | null>(null);
   const [completeUploading, setCompleteUploading] = useState<number | null>(null);
   const [deliveryModal, setDeliveryModal] = useState<{ jobCardId: number } | null>(null);
-  const [deliveryStep, setDeliveryStep] = useState<'generate' | 'confirm'>('generate');
+  const [deliveryStep, setDeliveryStep] = useState<'choose-phone' | 'generate' | 'confirm' | 'verified'>('choose-phone');
+  const [phoneChoice, setPhoneChoice] = useState<'existing' | 'manual'>('existing');
+  const [manualPhone, setManualPhone] = useState('');
   const [otpDisplay, setOtpDisplay] = useState('');
   const [otpInput, setOtpInput] = useState('');
+  const [otpSentTo, setOtpSentTo] = useState('');
   const [deliveryError, setDeliveryError] = useState('');
   const [deliverySubmitting, setDeliverySubmitting] = useState(false);
+  const [deliverFinalizing, setDeliverFinalizing] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
 
@@ -101,6 +106,13 @@ export default function JobCardsPage() {
 
   useEffect(() => { loadJobCards(); }, []);
   useEffect(() => { loadTechnicians(); }, [role]);
+  useEffect(() => {
+    if (role === 'customer') {
+      fetch('/api/vehicles')
+        .then((res) => res.json())
+        .then((json) => setMyVehicles(json.data || []));
+    }
+  }, [role]);
 
   useEffect(() => {
     if (!form.chassisNumber) {
@@ -259,9 +271,12 @@ export default function JobCardsPage() {
 
   const openDeliveryModal = (jobCardId: number) => {
     setDeliveryModal({ jobCardId });
-    setDeliveryStep('generate');
+    setDeliveryStep('choose-phone');
+    setPhoneChoice('existing');
+    setManualPhone('');
     setOtpDisplay('');
     setOtpInput('');
+    setOtpSentTo('');
     setDeliveryError('');
   };
 
@@ -271,22 +286,45 @@ export default function JobCardsPage() {
 
   const generateOtp = async () => {
     if (!deliveryModal) return;
+    if (phoneChoice === 'manual' && !/^\d{10}$/.test(manualPhone)) {
+      setDeliveryError('Enter a valid 10-digit phone number');
+      return;
+    }
     setDeliverySubmitting(true);
     setDeliveryError('');
     try {
       const res = await fetch(`/api/jobcards/${deliveryModal.jobCardId}/delivery`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'generate' }),
+        body: JSON.stringify({ action: 'generate', phoneChoice, manualPhone: phoneChoice === 'manual' ? manualPhone : undefined }),
       });
       const json = await res.json();
       if (!json.success) { setDeliveryError(json.error || 'Failed to generate OTP'); return; }
       setOtpDisplay(json.otp);
+      setOtpSentTo(json.verificationPhone || '');
       setDeliveryStep('confirm');
     } catch {
       setDeliveryError('Network error — try again');
     } finally {
       setDeliverySubmitting(false);
+    }
+  };
+
+  const finalizeDelivery = async (jobCardId: number) => {
+    setDeliverFinalizing(true);
+    try {
+      const res = await fetch(`/api/jobcards/${jobCardId}/delivery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deliver' }),
+      });
+      const json = await res.json();
+      if (!json.success) setActionMessage('Error: ' + (json.error || 'Failed to mark delivered'));
+      loadJobCards();
+    } catch {
+      setActionMessage('Network error — try again');
+    } finally {
+      setDeliverFinalizing(false);
     }
   };
 
@@ -357,7 +395,7 @@ export default function JobCardsPage() {
       });
       const json = await res.json();
       if (!json.success) { setDeliveryError(json.error || 'Failed to confirm delivery'); return; }
-      closeDeliveryModal();
+      setDeliveryStep('verified');
       loadJobCards();
     } catch {
       setDeliveryError('Network error — try again');
@@ -445,12 +483,20 @@ export default function JobCardsPage() {
       if (jc.status === 'rejected_by_dealer') {
         return <span className="text-xs" style={{ color: RED }}>{jc.dealer_rejection_reason}</span>;
       }
-      if (jc.status === 'completed') {
+      if (jc.status === 'completed' && !jc.customer_verified_at) {
         return (
           <button onClick={() => openDeliveryModal(jc.job_card_id)}
             className="text-xs font-medium px-3 py-1.5 rounded-lg border"
             style={{ borderColor: VIOLET, color: VIOLET }}>
-            Verify & deliver →
+            Customer verification →
+          </button>
+        );
+      }
+      if (jc.status === 'completed' && jc.customer_verified_at) {
+        return (
+          <button onClick={() => finalizeDelivery(jc.job_card_id)} disabled={deliverFinalizing}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg text-white disabled:opacity-50" style={{ backgroundColor: GREEN }}>
+            {deliverFinalizing ? 'Marking...' : 'Mark delivered'}
           </button>
         );
       }
@@ -516,6 +562,18 @@ export default function JobCardsPage() {
           </label>
         );
       }
+      if (jc.status === 'completed' && !jc.customer_verified_at) {
+        return (
+          <button onClick={() => openDeliveryModal(jc.job_card_id)}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg border"
+            style={{ borderColor: VIOLET, color: VIOLET }}>
+            Customer verification →
+          </button>
+        );
+      }
+      if (jc.status === 'completed' && jc.customer_verified_at) {
+        return <span className="text-xs" style={{ color: MUTED }}>Verified — waiting for dealer to mark delivered</span>;
+      }
       return null;
     }
     // customer / other roles: read-only
@@ -571,7 +629,7 @@ export default function JobCardsPage() {
           />
           <h1 className="relative text-[28px] font-extrabold tracking-tight" style={{ color: INK }}>Job cards / complaints</h1>
           <p className="relative text-sm mt-2" style={{ color: MUTED }}>Track, manage and resolve customer complaints & service jobs</p>
-          <div className="absolute right-8 top-6 hidden md:block w-32 opacity-90 float-icon">
+          <div className="absolute right-8 top-1/2 -translate-y-1/2 hidden md:block w-36 opacity-90 float-icon">
             <Image src="/hero-scooter.png" alt="" width={220} height={220} className="object-contain w-full h-auto" />
           </div>
         </div>
@@ -645,8 +703,23 @@ export default function JobCardsPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div>
                 <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Vehicle (chassis number) *</label>
-                <input name="chassisNumber" placeholder="Enter chassis number" value={form.chassisNumber} onChange={handleChange} required
-                  className="w-full rounded-2xl px-4 py-3 text-sm outline-none" style={inputStyle} onFocus={inputFocus} onBlur={inputBlurH} />
+                {role === 'customer' ? (
+                  <select name="chassisNumber" value={form.chassisNumber} onChange={handleChange} required
+                    className="w-full rounded-2xl px-4 py-3 text-sm outline-none" style={inputStyle} onFocus={inputFocus} onBlur={inputBlurH}>
+                    <option value="">Select your vehicle</option>
+                    {myVehicles.map((v) => (
+                      <option key={v.vehicle_id} value={v.chassis_number}>
+                        {v.chassis_number} — {v.model_name ?? 'Vehicle'} ({v.colour})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input name="chassisNumber" placeholder="Enter chassis number" value={form.chassisNumber} onChange={handleChange} required
+                    className="w-full rounded-2xl px-4 py-3 text-sm outline-none" style={inputStyle} onFocus={inputFocus} onBlur={inputBlurH} />
+                )}
+                {role === 'customer' && myVehicles.length === 0 && (
+                  <p className="text-xs mt-1.5" style={{ color: MUTED }}>No vehicles registered under your account yet.</p>
+                )}
                 {warrantyError && <p className="text-xs mt-1.5" style={{ color: RED }}>{warrantyError}</p>}
                 {warranty && (
                   <div className="mt-2 rounded-xl p-3 text-xs space-y-1" style={{ backgroundColor: VIOLET_DIM }}>
@@ -804,6 +877,9 @@ export default function JobCardsPage() {
                           <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: STATUS_COLOR[jc.status] }} />
                           {STATUS_LABEL[jc.status] ?? jc.status}
                         </span>
+                        {['technician_assigned', 'in_progress', 'completed', 'delivered'].includes(jc.status) && jc.technician_name && (
+                          <p className="text-[10px] mt-1" style={{ color: MUTED }}>🔧 {jc.technician_name}</p>
+                        )}
                         {jc.auto_assigned === 1 && (
                           <p className="text-[10px] font-semibold mt-1" style={{ color: '#F5A623' }}>⚡ Auto-assigned</p>
                         )}
@@ -842,16 +918,34 @@ export default function JobCardsPage() {
                 <button onClick={closeDeliveryModal} style={{ color: MUTED }}>✕</button>
               </div>
 
-              {deliveryStep === 'generate' && (
+              {deliveryStep === 'choose-phone' && (
                 <>
-                  <p className="text-sm mb-5" style={{ color: MUTED }}>
-                    Generate a one-time code to confirm this vehicle is being handed over to the customer.
+                  <p className="text-sm mb-4" style={{ color: MUTED }}>
+                    Where should the verification OTP be sent?
                   </p>
+                  <div className="space-y-2 mb-4">
+                    <label className="flex items-center gap-2.5 rounded-xl p-3 border cursor-pointer" style={{ borderColor: phoneChoice === 'existing' ? VIOLET : BORDER }}>
+                      <input type="radio" checked={phoneChoice === 'existing'} onChange={() => setPhoneChoice('existing')} />
+                      <span className="text-sm" style={{ color: INK }}>
+                        Use registered number ({jobCards.find((j) => j.job_card_id === deliveryModal.jobCardId)?.phone || 'on file'})
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2.5 rounded-xl p-3 border cursor-pointer" style={{ borderColor: phoneChoice === 'manual' ? VIOLET : BORDER }}>
+                      <input type="radio" checked={phoneChoice === 'manual'} onChange={() => setPhoneChoice('manual')} />
+                      <span className="text-sm" style={{ color: INK }}>Enter a different number</span>
+                    </label>
+                    {phoneChoice === 'manual' && (
+                      <input value={manualPhone} onChange={(e) => setManualPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        placeholder="10-digit mobile number"
+                        className="w-full rounded-xl px-4 py-2.5 text-sm outline-none"
+                        style={{ border: `1px solid ${BORDER}` }} />
+                    )}
+                  </div>
                   {deliveryError && <p className="text-sm mb-3" style={{ color: RED }}>{deliveryError}</p>}
                   <button onClick={generateOtp} disabled={deliverySubmitting}
                     className="w-full text-sm font-semibold text-white px-5 py-2.5 rounded-xl disabled:opacity-50"
                     style={{ background: `linear-gradient(135deg, ${VIOLET_LIGHT}, ${VIOLET})` }}>
-                    {deliverySubmitting ? 'Generating...' : 'Generate delivery OTP'}
+                    {deliverySubmitting ? 'Sending...' : 'Send OTP'}
                   </button>
                 </>
               )}
@@ -859,10 +953,12 @@ export default function JobCardsPage() {
               {deliveryStep === 'confirm' && (
                 <>
                   <div className="rounded-xl p-3 mb-4 text-center" style={{ backgroundColor: VIOLET_DIM }}>
-                    <p className="text-xs mb-1" style={{ color: MUTED }}>Share this code with the customer</p>
+                    <p className="text-xs mb-1" style={{ color: MUTED }}>OTP sent to {otpSentTo || 'customer'}</p>
                     <p className="text-2xl font-bold tracking-[0.3em]" style={{ color: VIOLET }}>{otpDisplay}</p>
-                    <p className="text-[10px] mt-1" style={{ color: MUTED }}>Valid for 10 minutes</p>
+                    <p className="text-[10px] mt-1" style={{ color: MUTED }}>Valid for 10 minutes · no SMS gateway yet, shown here for now</p>
                   </div>
+
+                  <p className="text-xs mb-3" style={{ color: MUTED }}>Hand the device to the customer to enter the OTP and sign below.</p>
 
                   <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Enter OTP to confirm</label>
                   <input value={otpInput} onChange={(e) => setOtpInput(e.target.value)} maxLength={6}
@@ -898,9 +994,23 @@ export default function JobCardsPage() {
                     <button onClick={submitDelivery} disabled={deliverySubmitting}
                       className="text-sm font-semibold text-white px-5 py-2 rounded-xl disabled:opacity-50"
                       style={{ background: `linear-gradient(135deg, ${VIOLET_LIGHT}, ${VIOLET})` }}>
-                      {deliverySubmitting ? 'Confirming...' : 'Confirm delivery'}
+                      {deliverySubmitting ? 'Verifying...' : 'Verify OTP & save signature'}
                     </button>
                   </div>
+                </>
+              )}
+
+              {deliveryStep === 'verified' && (
+                <>
+                  <div className="rounded-xl p-4 mb-5 text-center" style={{ backgroundColor: 'rgba(52,199,89,0.1)' }}>
+                    <p className="text-sm font-semibold" style={{ color: GREEN }}>Customer verified ✓</p>
+                    <p className="text-xs mt-1" style={{ color: MUTED }}>OTP confirmed and signature captured. Close this and use "Mark delivered" on the job card.</p>
+                  </div>
+                  <button onClick={closeDeliveryModal}
+                    className="w-full text-sm font-semibold px-5 py-2.5 rounded-xl border"
+                    style={{ borderColor: VIOLET, color: VIOLET }}>
+                    Close
+                  </button>
                 </>
               )}
             </div>

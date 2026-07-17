@@ -10,6 +10,7 @@ import { NAV_ITEMS } from '@/app/lib/nav-items';
 import { CountUp } from '@/app/components/CountUp';
 import { DonutChart } from '@/app/components/DonutChart';
 import { SparkLine } from '@/app/components/SparkLine';
+import { useLanguage } from '@/app/lib/LanguageContext';
 
 const VIOLET = '#6C5CE7';
 const VIOLET_LIGHT = '#8B7CF8';
@@ -26,10 +27,10 @@ const WARN = '#E24B4A';
 const CARD_SHADOW = '0 1px 2px rgba(20,10,50,0.04), 0 8px 24px -12px rgba(20,10,50,0.08)';
 const CARD_SHADOW_HOVER = '0 4px 12px rgba(20,10,50,0.06), 0 16px 36px -12px rgba(108,92,231,0.18)';
 
-const ACTIVITY_LABEL: Record<string, string> = {
-  vehicle: 'Vehicle registered',
-  job_card: 'Job card created',
-  warranty_claim: 'Warranty claim submitted',
+const ACTIVITY_LABEL_KEY: Record<string, 'activityVehicle' | 'activityJobCard' | 'activityWarrantyClaim'> = {
+  vehicle: 'activityVehicle',
+  job_card: 'activityJobCard',
+  warranty_claim: 'activityWarrantyClaim',
 };
 
 const QUICK_ACTION_ICONS: Record<string, string> = {
@@ -255,7 +256,7 @@ function AIWaveform() {
 }
 
 /* ---------------- Hero with scroll-driven scooter ---------------- */
-function AerysHero({ name }: { name: string }) {
+function AerysHero({ name, welcomeLabel }: { name: string; welcomeLabel: string }) {
   const { scrollY } = useScroll();
   const scooterScale = useTransform(scrollY, [0, 260], [1.08, 1]);
   const scooterY = useTransform(scrollY, [0, 260], [0, -6]);
@@ -291,7 +292,7 @@ function AerysHero({ name }: { name: string }) {
 
       <div className="relative w-full flex flex-col lg:flex-row items-center justify-between px-8 sm:px-12 gap-4">
         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15, duration: 0.6 }}>
-          <p className="text-xs font-bold tracking-[0.15em] mb-3" style={{ color: VIOLET }}>WELCOME BACK, {name.toUpperCase()}</p>
+          <p className="text-xs font-bold tracking-[0.15em] mb-3" style={{ color: VIOLET }}>{welcomeLabel}, {name.toUpperCase()}</p>
           <h1 className="text-2xl sm:text-[30px] font-extrabold leading-tight" style={{ color: INK }}>Here is the</h1>
           <h1 className="text-4xl sm:text-[50px] font-extrabold leading-none mb-5" style={{ color: INK }}>FUTURE</h1>
           <div className="flex items-center gap-4">
@@ -359,6 +360,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const role = (session?.user as any)?.role || '';
   const name = session?.user?.name || 'there';
+  const { t } = useLanguage();
 
   useEffect(() => {
     fetch('/api/homepage-stats')
@@ -369,8 +371,8 @@ export default function Home() {
 
   const sidebarFooter = (
     <div className="rounded-2xl p-4" style={{ background: `linear-gradient(135deg, ${LAV_PALE}, ${LAV})`, border: `1px solid ${BORDER}` }}>
-      <p className="text-sm font-semibold mb-1" style={{ color: VIOLET }}>Need help?</p>
-      <p className="text-xs mb-3" style={{ color: MUTED }}>We are here for you!</p>
+      <p className="text-sm font-semibold mb-1" style={{ color: VIOLET }}>{t('aiAssistant')}</p>
+      <p className="text-xs mb-3" style={{ color: MUTED }}>{t('aiAssistantDesc')}</p>
       <button className="w-full text-sm font-medium text-white rounded-xl py-2 flex items-center justify-center gap-1.5" style={{ background: `linear-gradient(135deg, ${VIOLET_LIGHT}, ${VIOLET})` }}>
         Start a chat →
       </button>
@@ -399,7 +401,7 @@ export default function Home() {
             <p className="mb-4"><Link href="/login" style={{ color: VIOLET }}>Log in</Link></p>
           )}
 
-          <AerysHero name={name} />
+          <AerysHero name={name} welcomeLabel={t('welcomeBack')} />
 
           {/* 5 KPI cards */}
           <motion.div
@@ -410,11 +412,11 @@ export default function Home() {
             variants={{ hidden: {}, show: { transition: { staggerChildren: 0.1 } } }}
           >
             {[
-              { label: 'Total Vehicles', value: stats?.totalVehicles, icon: 'M3 13l1.5-4.5A2 2 0 016.4 7h11.2a2 2 0 011.9 1.5L21 13M2.5 13h19v6h-19z' },
-              { label: 'Active Jobs', value: stats?.activeJobs, icon: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z M14 2v6h6' },
-              { label: 'Pending Jobs', value: stats?.pendingJobs, icon: 'M12 8v4l3 3M12 22a10 10 0 100-20 10 10 0 000 20z' },
-              { label: 'SLA Breaches', value: stats?.slaBreached, icon: 'M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01' },
-              { label: 'Completed Today', value: stats?.completedToday, icon: 'M20 6L9 17l-5-5' },
+              { label: t('totalVehicles'), value: stats?.totalVehicles, icon: 'M3 13l1.5-4.5A2 2 0 016.4 7h11.2a2 2 0 011.9 1.5L21 13M2.5 13h19v6h-19z' },
+              { label: t('activeJobs'), value: stats?.activeJobs, icon: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z M14 2v6h6' },
+              { label: t('pendingJobs'), value: stats?.pendingJobs, icon: 'M12 8v4l3 3M12 22a10 10 0 100-20 10 10 0 000 20z' },
+              { label: t('slaBreaches'), value: stats?.slaBreached, icon: 'M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01' },
+              { label: t('completedToday'), value: stats?.completedToday, icon: 'M20 6L9 17l-5-5' },
             ].map((c) => (
               <motion.div
                 key={c.label}
@@ -441,7 +443,7 @@ export default function Home() {
           {/* Fleet Overview | Recent Activity | Quick Actions */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
             <div className="rounded-[16px] p-6 bg-white border fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-              <p className="text-[15px] font-bold mb-4" style={{ color: INK }}>Vehicle Overview</p>
+              <p className="text-[15px] font-bold mb-4" style={{ color: INK }}>{t('vehicleOverview')}</p>
               <div className="flex items-center gap-6 flex-wrap">
                 <DonutChart
                   total={stats?.totalVehicles ?? 0}
@@ -452,31 +454,32 @@ export default function Home() {
                 <div className="space-y-3 text-sm">
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: VIOLET }} />
-                    <span style={{ color: MUTED }}>Active</span>
+                    <span style={{ color: MUTED }}>{t('active')}</span>
                     <span className="font-semibold ml-2" style={{ color: INK }}>{stats?.activeJobs ?? 0}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: VIOLET_LIGHT }} />
-                    <span style={{ color: MUTED }}>In Service</span>
+                    <span style={{ color: MUTED }}>{t('inService')}</span>
                     <span className="font-semibold ml-2" style={{ color: INK }}>{Math.max((stats?.totalVehicles ?? 0) - (stats?.activeJobs ?? 0) - (stats?.pendingJobs ?? 0), 0)}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#D9D3FF' }} />
-                    <span style={{ color: MUTED }}>Inactive</span>
+                    <span style={{ color: MUTED }}>{t('inactive')}</span>
                     <span className="font-semibold ml-2" style={{ color: INK }}>{stats?.pendingJobs ?? 0}</span>
                   </div>
                 </div>
               </div>
-              <Link href="/vehicles" className="text-xs font-semibold mt-5 inline-flex items-center gap-1" style={{ color: VIOLET }}>View full report →</Link>
+              <Link href="/vehicles" className="text-xs font-semibold mt-5 inline-flex items-center gap-1" style={{ color: VIOLET }}>{t('viewFullReport')}</Link>
             </div>
 
             <div className="rounded-[16px] p-6 bg-white border fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-              <p className="text-[15px] font-bold mb-4" style={{ color: INK }}>Recent Activity</p>
+              <p className="text-[15px] font-bold mb-4" style={{ color: INK }}>{t('recentActivity')}</p>
               <div className="relative">
                 {stats?.recentActivity?.length ? (
                   <div className="space-y-4">
                     {stats.recentActivity.slice(0, 5).map((a: any, i: number) => {
                       const meta = ACTIVITY_ICONS[a.type] ?? ACTIVITY_ICONS.job_card;
+                      const labelKey = ACTIVITY_LABEL_KEY[a.type];
                       return (
                         <motion.div
                           key={i}
@@ -492,7 +495,7 @@ export default function Home() {
                             </svg>
                           </span>
                           <div className="flex-1 min-w-0">
-                            <p className="font-semibold truncate" style={{ color: INK }}>{ACTIVITY_LABEL[a.type] ?? 'Activity'}</p>
+                            <p className="font-semibold truncate" style={{ color: INK }}>{labelKey ? t(labelKey) : 'Activity'}</p>
                             <p className="truncate" style={{ color: MUTED }}>{a.ref}</p>
                           </div>
                           <span className="shrink-0" style={{ color: MUTED }}>{timeAgo(a.ts)}</span>
@@ -500,22 +503,22 @@ export default function Home() {
                       );
                     })}
                   </div>
-                ) : <p className="text-xs" style={{ color: MUTED }}>No recent activity.</p>}
+                ) : <p className="text-xs" style={{ color: MUTED }}>{t('noRecentActivity')}</p>}
               </div>
             </div>
 
             <div className="rounded-[16px] p-6 bg-white border fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-              <p className="text-[15px] font-bold mb-4" style={{ color: INK }}>Quick Actions</p>
+              <p className="text-[15px] font-bold mb-4" style={{ color: INK }}>{t('quickActions')}</p>
               <div className="space-y-3">
                 {[
                   ...(role === 'customer'
-                    ? [{ label: 'View my vehicles', desc: 'See all vehicles under your name', href: '/vehicles' }]
+                    ? [{ label: t('viewMyVehicles'), desc: t('viewMyVehiclesDesc'), href: '/vehicles' }]
                     : role === 'technician'
-                    ? [{ label: 'View my jobs', desc: 'See jobs assigned to you', href: '/jobcards' }]
-                    : [{ label: 'Register new vehicle', desc: 'Register a new vehicle', href: '/vehicles' }]),
-                  { label: 'Create job card', desc: 'Log a new service task', href: '/jobcards' },
-                  ...(role === 'technician' ? [] : [{ label: 'Add complaint', desc: 'Record a customer complaint', href: '/jobcards' }]),
-                  { label: 'New warranty claim', desc: 'File a claim for review', href: '/warranty-claims' },
+                    ? [{ label: t('viewMyJobs'), desc: t('viewMyJobsDesc'), href: '/jobcards' }]
+                    : [{ label: t('registerNewVehicle'), desc: t('registerNewVehicleDesc'), href: '/vehicles' }]),
+                  { label: t('createJobCard'), desc: t('createJobCardDesc'), href: '/jobcards' },
+                  ...(role === 'technician' ? [] : [{ label: t('addComplaint'), desc: t('addComplaintDesc'), href: '/jobcards' }]),
+                  { label: t('newWarrantyClaim'), desc: t('newWarrantyClaimDesc'), href: '/warranty-claims' },
                 ].map((a, idx2) => (
                   <Link key={a.label} href={a.href}
                     className="group relative flex items-center gap-3 p-3.5 rounded-xl transition-all duration-200 overflow-hidden"
@@ -542,28 +545,28 @@ export default function Home() {
           {/* Fleet Performance | Service Centers | AI Assistant */}
           <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr_0.9fr] gap-4 mb-5">
             <div className="rounded-[16px] p-6 bg-white border fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-              <p className="text-[15px] font-bold mb-4" style={{ color: INK }}>Vehicle Performance</p>
+              <p className="text-[15px] font-bold mb-4" style={{ color: INK }}>{t('vehiclePerformance')}</p>
               <FleetPerformanceChart trend={stats?.jobsToday !== undefined ? (stats?.jobsTrend ?? []) : []} />
             </div>
 
             <div className="rounded-[16px] p-6 bg-white border fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-              <p className="text-[15px] font-bold mb-4" style={{ color: INK }}>Service Centers</p>
+              <p className="text-[15px] font-bold mb-4" style={{ color: INK }}>{t('serviceCenters')}</p>
               <ServiceCentersMap centers={stats?.dealerLeaderboard?.length ?? 0} />
               <div className="flex items-center justify-between text-sm">
                 <div>
                   <p className="text-xl font-extrabold" style={{ color: INK }}><CountUp value={stats?.dealerLeaderboard?.length ?? 0} /></p>
-                  <p className="text-[10px]" style={{ color: MUTED }}>Total Centers</p>
+                  <p className="text-[10px]" style={{ color: MUTED }}>{t('totalCenters')}</p>
                 </div>
                 <div>
                   <p className="text-xl font-extrabold" style={{ color: INK }}><CountUp value={stats?.activeJobs ?? 0} /></p>
-                  <p className="text-[10px]" style={{ color: MUTED }}>Active Today</p>
+                  <p className="text-[10px]" style={{ color: MUTED }}>{t('activeToday')}</p>
                 </div>
               </div>
             </div>
 
             <div className="rounded-[16px] p-6 fade-up" style={{ backgroundColor: LAV, boxShadow: CARD_SHADOW }}>
-              <p className="text-[15px] font-bold mb-2" style={{ color: VIOLET }}>AI Assistant</p>
-              <p className="text-xs mb-4" style={{ color: MUTED }}>Ask anything about vehicles, jobs, claims or inventory...</p>
+              <p className="text-[15px] font-bold mb-2" style={{ color: VIOLET }}>{t('aiAssistant')}</p>
+              <p className="text-xs mb-4" style={{ color: MUTED }}>{t('aiAssistantDesc')}</p>
               <AIWaveform />
             </div>
           </div>
@@ -571,7 +574,7 @@ export default function Home() {
           {/* Dealer leaderboard (below primary layout) */}
           {(role === 'super_admin' || role === 'dealer') && stats?.dealerLeaderboard?.length > 0 && (
             <div className="rounded-[16px] p-6 bg-white border fade-up mb-4" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-              <p className="text-[15px] font-bold mb-4" style={{ color: INK }}>Dealer leaderboard</p>
+              <p className="text-[15px] font-bold mb-4" style={{ color: INK }}>{t('dealerLeaderboard')}</p>
               <div className="space-y-4">
                 {stats.dealerLeaderboard.map((d: any, i: number) => {
                   const max = Math.max(...stats.dealerLeaderboard.map((x: any) => x.jobs), 1);
@@ -605,12 +608,12 @@ export default function Home() {
 
           {/* Announcements */}
           <div className="rounded-[16px] p-6 bg-white border mb-4" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
-            <p className="text-[15px] font-bold mb-4" style={{ color: INK }}>Announcements</p>
+            <p className="text-[15px] font-bold mb-4" style={{ color: INK }}>{t('announcements')}</p>
             <div className="flex flex-wrap gap-6">
               {[
-                { text: 'System maintenance scheduled 16 July, 12:00 AM' },
-                { text: 'Job card module has a new bulk-update feature' },
-                { text: 'Training session for service advisors on 18 July' },
+                { text: t('announcement1') },
+                { text: t('announcement2') },
+                { text: t('announcement3') },
               ].map((a, i) => (
                 <div key={i} className="flex items-start gap-2 text-xs" style={{ color: MUTED }}>
                   <span className="w-1.5 h-1.5 rounded-full mt-1 shrink-0" style={{ backgroundColor: VIOLET }} />

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 import { ResponsiveLayout } from '@/app/components/ResponsiveLayout';
 import { NAV_ITEMS } from '@/app/lib/nav-items';
@@ -76,9 +77,12 @@ export default function WarrantyCheckPage() {
   return (
     <ResponsiveLayout navItems={NAV}>
       <div style={{ fontFamily: 'Inter, sans-serif' }}>
-        <div className="rounded-2xl p-6 mb-6" style={{ background: `linear-gradient(135deg, ${VIOLET_DIM}, rgba(255,255,255,0.4))` }}>
+        <div className="rounded-2xl p-6 mb-6 relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${VIOLET_DIM}, rgba(255,255,255,0.4))` }}>
           <h1 className="text-2xl font-bold" style={{ color: INK }}>Smart warranty check</h1>
           <p className="text-sm mt-1" style={{ color: MUTED }}>Scan or enter a chassis number to check warranty status and claim eligibility</p>
+          <div className="absolute right-8 top-1/2 -translate-y-1/2 hidden md:block w-36 opacity-90">
+            <Image src="/hero-scooter.png" alt="" width={220} height={220} className="object-contain w-full h-auto" />
+          </div>
         </div>
 
         <form onSubmit={handleSearch} className="flex gap-3 mb-6">

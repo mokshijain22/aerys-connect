@@ -175,8 +175,8 @@ export default function WarrantyClaimsPage() {
       <div className="rounded-[20px] p-7 mb-6 relative overflow-hidden fade-up" style={{ background: `linear-gradient(135deg, ${VIOLET_DIM}, rgba(255,255,255,0.4))`, border: `1px solid ${BORDER}`, boxShadow: CARD_SHADOW }}>
         <h1 className="text-[28px] font-extrabold tracking-tight" style={{ color: INK }}>Warranty claims</h1>
         <p className="text-sm mt-2" style={{ color: MUTED }}>Track and manage warranty claims efficiently</p>
-        <div className="absolute right-6 top-2 hidden md:block w-40 opacity-90">
-          <Image src="/hero-scooter.png" alt="" width={300} height={300} className="object-contain w-full h-auto" />
+        <div className="absolute right-8 top-1/2 -translate-y-1/2 hidden md:block w-36 opacity-95">
+          <Image src="/hero-scooter.png" alt="" width={300} height={300} className="object-contain w-full h-auto drop-shadow-xl" />
         </div>
       </div>
 

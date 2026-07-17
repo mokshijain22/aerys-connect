@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { ROLE_ACCESS } from '@/app/lib/role-access';
+import { useLanguage } from '@/app/lib/LanguageContext';
 
 const VIOLET = '#6C5CE7';
 const VIOLET_LIGHT = '#8B7CF8';
@@ -54,6 +55,7 @@ export function ResponsiveLayout({ navItems, children, sidebarFooter }: Responsi
   const { data: session } = useSession();
   const user = session?.user as { role?: string; name?: string } | undefined;
   const role = user?.role || '';
+  const { lang, setLang, t } = useLanguage();
 
   const allowedNav = navItems.filter((item) =>
     ROLE_ACCESS[role]?.some((p) => (p === '/' ? item.href === '/' : item.href.startsWith(p)))
@@ -176,10 +178,29 @@ export function ResponsiveLayout({ navItems, children, sidebarFooter }: Responsi
               >
                 <path d={NAV_ICONS[item.href] ?? NAV_ICONS['/settings']} />
               </svg>
-              {item.label}
+              {(item as any).key ? t((item as any).key) : item.label}
             </Link>
           ))}
         </nav>
+
+        <div className="px-2 mb-2">
+          <div className="flex rounded-xl overflow-hidden border" style={{ borderColor: BORDER }}>
+            <button
+              onClick={() => setLang('en')}
+              className="flex-1 text-xs font-semibold py-1.5 transition-colors"
+              style={lang === 'en' ? { backgroundColor: VIOLET, color: '#fff' } : { color: MUTED }}
+            >
+              EN
+            </button>
+            <button
+              onClick={() => setLang('hi')}
+              className="flex-1 text-xs font-semibold py-1.5 transition-colors"
+              style={lang === 'hi' ? { backgroundColor: VIOLET, color: '#fff' } : { color: MUTED }}
+            >
+              हिं
+            </button>
+          </div>
+        </div>
 
         {/* Sidebar footer content */}
         {sidebarFooter && <div className="mt-4">{sidebarFooter}</div>}

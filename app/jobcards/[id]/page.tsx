@@ -199,7 +199,7 @@ export default function JobCardDetailPage() {
           </div>
         )}
 
-        {jc.technician_name && ['in_progress', 'completed', 'delivered'].includes(jc.status) && (
+        {jc.technician_name && ['technician_assigned', 'in_progress', 'completed', 'delivered'].includes(jc.status) && (
           <div className="mb-6 rounded-xl p-4" style={{ backgroundColor: VIOLET_DIM }}>
             <p className="text-sm font-semibold mb-1" style={{ color: VIOLET }}>Assigned Technician</p>
             <p className="text-sm" style={{ color: INK }}>{jc.technician_name} · {jc.technician_phone}</p>
@@ -226,10 +226,14 @@ export default function JobCardDetailPage() {
           </div>
         </div>
 
-        {jc.status === 'delivered' && jc.signature_path && (
+        {jc.customer_verified_at && (
           <div className="pt-4 border-t mt-4" style={{ borderColor: BORDER }}>
-            <p className="text-sm font-semibold mb-3" style={{ color: INK }}>Customer signature</p>
-            <img src={jc.signature_path} alt="Customer signature" className="rounded-xl border max-w-xs" style={{ borderColor: BORDER, backgroundColor: '#FAFAFF' }} />
+            <p className="text-sm font-semibold mb-3" style={{ color: INK }}>Customer verification</p>
+            <p className="text-xs mb-1" style={{ color: MUTED }}>OTP sent to: <span style={{ color: INK }}>{jc.verification_phone || '—'}</span></p>
+            <p className="text-xs mb-3" style={{ color: MUTED }}>Verified at: <span style={{ color: INK }}>{fmt(jc.customer_verified_at)}</span></p>
+            {jc.signature_path && (
+              <img src={jc.signature_path} alt="Customer signature" className="rounded-xl border max-w-xs" style={{ borderColor: BORDER, backgroundColor: '#FAFAFF' }} />
+            )}
           </div>
         )}
 

@@ -148,6 +148,9 @@ export default function VehiclesPage() {
           />
           <h1 className="relative text-[28px] font-extrabold tracking-tight" style={{ color: INK }}>{role === 'customer' ? 'My vehicles' : 'Register a vehicle'}</h1>
           <p className="relative text-sm mt-2" style={{ color: MUTED }}>{role === 'customer' ? 'View your registered vehicles' : 'Add a new vehicle to your fleet database'}</p>
+          <div className="absolute right-8 top-1/2 -translate-y-1/2 hidden md:block w-36 opacity-90">
+            <Image src="/hero-scooter.png" alt="" width={220} height={220} className="object-contain w-full h-auto" />
+          </div>
           </div>
 
         {/* Stepper */}

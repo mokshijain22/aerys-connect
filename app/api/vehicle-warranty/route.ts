@@ -15,8 +15,9 @@ const OPEN_STATUSES = ['submitted', 'dealer_approved', 'company_approved'];
 export async function GET(request: Request) {
   const session = await auth();
   const role = (session?.user as any)?.role || '';
+  const sessionCustomerId = (session?.user as any)?.customer_id || null;
 
-  if (role !== 'dealer' && role !== 'super_admin') {
+  if (role !== 'dealer' && role !== 'super_admin' && role !== 'customer') {
     return NextResponse.json({ success: false, error: 'Not authorized' }, { status: 403 });
   }
 
@@ -29,7 +30,7 @@ export async function GET(request: Request) {
 
   const [vehicleRows]: any = await pool.query(
     `SELECT
-      v.vehicle_id, v.chassis_number,
+      v.vehicle_id, v.chassis_number, v.customer_id,
       v.battery_warranty_end, v.motor_warranty_end, v.charger_warranty_end,
       v.battery_warranty_end >= CURDATE() AS battery_in_warranty,
       v.motor_warranty_end >= CURDATE() AS motor_in_warranty,
@@ -44,6 +45,10 @@ export async function GET(request: Request) {
   }
 
   const vehicle = vehicleRows[0];
+
+  if (role === 'customer' && vehicle.customer_id !== sessionCustomerId) {
+    return NextResponse.json({ success: false, error: 'This vehicle is not registered under your account' }, { status: 403 });
+  }
 
   const [claimRows]: any = await pool.query(
     `SELECT claim_id, claim_number, component, warranty_status_at_claim, status, submitted_at, resolved_at, remarks

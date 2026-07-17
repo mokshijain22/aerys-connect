@@ -89,6 +89,7 @@ export async function GET() {
       jc.job_card_id, jc.complaint_text, jc.status, jc.service_type,
       jc.part_category, jc.symptom_type, jc.priority,
       jc.registered_at, jc.escalated, jc.escalated_at, jc.arrived_at, jc.auto_assigned,
+      jc.customer_verified_at, jc.verification_phone,
       v.chassis_number, c.full_name, c.phone,
       tu.full_name AS technician_name, tu.phone AS technician_phone,
       TIMESTAMPDIFF(MINUTE, jc.registered_at, NOW()) AS minutes_elapsed
@@ -136,8 +137,8 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ success: false, error: 'Technicians can only set status to in_progress or completed' }, { status: 403 });
   }
 
-  if (role === 'dealer' && !['acknowledged', 'rejected_by_dealer', 'delivered'].includes(newStatus)) {
-    return NextResponse.json({ success: false, error: 'Dealers can only acknowledge, reject, or mark delivered' }, { status: 403 });
+  if (role === 'dealer' && !['acknowledged', 'rejected_by_dealer'].includes(newStatus)) {
+    return NextResponse.json({ success: false, error: 'Use the delivery verification flow to mark a job delivered' }, { status: 403 });
   }
 
   if (newStatus === 'rejected_by_dealer' && !rejectionReason) {
