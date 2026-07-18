@@ -6,6 +6,8 @@ import { useSession } from 'next-auth/react';
 import { ResponsiveLayout } from '@/app/components/ResponsiveLayout';
 import { NAV_ITEMS } from '@/app/lib/nav-items';
 import Link from 'next/link';
+import { TechnicianLocationSender } from '@/app/components/TechnicianLocationSender';
+import { VoiceInput } from '@/app/components/VoiceInput';
 
 const VIOLET = '#6C5CE7';
 const VIOLET_LIGHT = '#8B7CF8';
@@ -409,6 +411,15 @@ export default function JobCardsPage() {
     e.target.value = '';
     if (!file) return;
     setCompleteUploading(jobCardId);
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        fetch(`/api/jobcards/${jobCardId}/completion-location`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+        }).catch(() => {});
+      }, () => {}, { enableHighAccuracy: true, timeout: 10000 });
+    }
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -737,7 +748,13 @@ export default function JobCardsPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Describe the complaint *</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-medium" style={{ color: INK }}>Describe the complaint *</label>
+                  <VoiceInput
+                    lang="en-IN"
+                    onResult={(text) => setForm((f) => ({ ...f, complaintText: (f.complaintText + ' ' + text).trim().slice(0, 500) }))}
+                  />
+                </div>
                 <textarea name="complaintText" placeholder="Describe issue / complaint in detail..." value={form.complaintText} onChange={handleChange} required
                   rows={4} maxLength={500}
                   className="w-full rounded-2xl px-4 py-3 text-sm outline-none resize-none" style={inputStyle} onFocus={inputFocus} onBlur={inputBlurH} />
@@ -889,6 +906,11 @@ export default function JobCardsPage() {
                         {isOverSla && <p className="text-[10px] font-semibold" style={{ color: RED }}>⚠ SLA breach</p>}
                       </td>
                       <td className="px-5 py-3">
+                        {role === 'technician' && ['technician_assigned', 'in_progress'].includes(jc.status) && (
+                          <div className="mb-1.5">
+                            <TechnicianLocationSender jobCardId={jc.job_card_id} active={true} />
+                          </div>
+                        )}
                         {renderActions(jc)}
                       </td>
                       <td className="px-5 py-3">

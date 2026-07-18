@@ -1,6 +1,6 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
-import { motion, useInView, animate } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import { motion, animate } from 'framer-motion';
 
 export function DonutChart({ active, inService, inactive, total }: { active: number; inService: number; inactive: number; total: number }) {
   const R = 70, C = 2 * Math.PI * R;
@@ -9,26 +9,21 @@ export function DonutChart({ active, inService, inactive, total }: { active: num
   const a3 = (inactive / total) * C || 0;
 
   const [hoverSeg, setHoverSeg] = useState<number | null>(null);
-  const ref = useRef<SVGSVGElement>(null);
-  const isInView = useInView(ref, { once: true, margin: '-40px' });
   const [display, setDisplay] = useState(0);
-  const hasAnimated = useRef(false);
 
   useEffect(() => {
-    if (!isInView || hasAnimated.current) return;
-    hasAnimated.current = true;
     const controls = animate(0, total, {
       duration: 1.2,
       ease: [0.16, 1, 0.3, 1],
       onUpdate: (v) => setDisplay(Math.round(v)),
     });
     return () => controls.stop();
-  }, [isInView, total]);
+  }, [total]);
 
   const opacityFor = (idx: number) => (hoverSeg === null || hoverSeg === idx ? 1 : 0.35);
 
   return (
-    <svg ref={ref} width="160" height="160" viewBox="0 0 160 160">
+    <svg width="160" height="160" viewBox="0 0 160 160">
       <circle cx="80" cy="80" r={R} fill="none" stroke="#F0EDFF" strokeWidth="18" />
       <motion.circle
         cx="80" cy="80" r={R} fill="none" stroke="#6C5CE7" strokeWidth={hoverSeg === 0 ? 20 : 18}

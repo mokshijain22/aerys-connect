@@ -114,7 +114,6 @@ export const autoDict: Record<string, string> = {
   'Loading dealers...': 'डीलर लोड हो रहे हैं...',
   'Loading users...': 'उपयोगकर्ता लोड हो रहे हैं...',
   'Loading claims...': 'दावे लोड हो रहे हैं...',
-  'Loading...': 'लोड हो रहा है...',
 };
 
 // Page-specific additions: Dealers, Technicians, Inventory, Warranty, Settings
@@ -123,7 +122,6 @@ export const pageSpecificAutoDict: Record<string, string> = {
   'Dealers': 'डीलर',
   'Dealer Code': 'डीलर कोड',
   'Dealer Name': 'डीलर का नाम',
-  'City': 'शहर',
   'Phone': 'फ़ोन',
   'Registered on': 'पंजीकृत तारीख',
   'All Cities': 'सभी शहर',

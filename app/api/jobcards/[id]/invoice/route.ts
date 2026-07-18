@@ -163,7 +163,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       doc.end();
     });
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',

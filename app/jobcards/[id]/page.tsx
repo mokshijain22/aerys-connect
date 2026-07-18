@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { LiveLocationPanel } from '@/app/components/LiveLocationPanel';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 
@@ -203,6 +204,12 @@ export default function JobCardDetailPage() {
           <div className="mb-6 rounded-xl p-4" style={{ backgroundColor: VIOLET_DIM }}>
             <p className="text-sm font-semibold mb-1" style={{ color: VIOLET }}>Assigned Technician</p>
             <p className="text-sm" style={{ color: INK }}>{jc.technician_name} · {jc.technician_phone}</p>
+          </div>
+        )}
+
+        {['technician_assigned', 'in_progress'].includes(jc.status) && (
+          <div className="mb-6">
+            <LiveLocationPanel jobCardId={jc.job_card_id} active={true} role={role} />
           </div>
         )}
 

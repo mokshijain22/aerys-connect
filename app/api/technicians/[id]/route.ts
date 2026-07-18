@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { pool } from '@/app/lib/db';
 import { auth } from '@/auth';
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id: technicianId } = await params;
     const session = await auth();
     const role = (session?.user as any)?.role || '';
     const sessionDealerId = (session?.user as any)?.dealer_id || null;
@@ -12,7 +13,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const technicianId = params.id;
     const body = await req.json();
     const { full_name, phone, email, is_active } = body;
 
@@ -54,8 +54,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id: technicianId } = await params;
     const session = await auth();
     const role = (session?.user as any)?.role || '';
     const sessionDealerId = (session?.user as any)?.dealer_id || null;
@@ -63,8 +64,6 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     if (role !== 'super_admin' && role !== 'dealer') {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
-
-    const technicianId = params.id;
 
     if (role === 'dealer') {
       const [[tech]]: any = await pool.query(

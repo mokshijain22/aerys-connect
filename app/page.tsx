@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { ResponsiveLayout } from '@/app/components/ResponsiveLayout';
@@ -26,6 +26,71 @@ const GOOD = '#34C759';
 const WARN = '#E24B4A';
 const CARD_SHADOW = '0 1px 2px rgba(20,10,50,0.04), 0 8px 24px -12px rgba(20,10,50,0.08)';
 const CARD_SHADOW_HOVER = '0 4px 12px rgba(20,10,50,0.06), 0 16px 36px -12px rgba(108,92,231,0.18)';
+
+function TiltCard({
+  children,
+  className = '',
+  style = {},
+  as: Comp = 'div',
+  onMouseEnter: externalEnter,
+  onMouseLeave: externalLeave,
+  ...rest
+}: {
+  children: any;
+  className?: string;
+  style?: any;
+  as?: any;
+  onMouseEnter?: (e: any) => void;
+  onMouseLeave?: (e: any) => void;
+  [key: string]: any;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [glow, setGlow] = useState({ x: 50, y: 50, active: false });
+
+  const handleMove = (e: any) => {
+    const el = ref.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width;
+    const py = (e.clientY - rect.top) / rect.height;
+    const rotateY = (px - 0.5) * 8;
+    const rotateX = (0.5 - py) * 8;
+    el.style.transform = `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-3px)`;
+    setGlow({ x: px * 100, y: py * 100, active: true });
+  };
+
+  const handleEnter = (e: any) => {
+    externalEnter?.(e);
+  };
+
+  const handleLeave = (e: any) => {
+    const el = ref.current;
+    if (el) el.style.transform = 'perspective(800px) rotateX(0deg) rotateY(0deg) translateY(0)';
+    setGlow((g) => ({ ...g, active: false }));
+    externalLeave?.(e);
+  };
+
+  return (
+    <Comp
+      ref={ref}
+      onMouseMove={handleMove}
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+      className={`relative overflow-hidden ${className}`}
+      style={{ transition: 'transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease', willChange: 'transform', ...style }}
+      {...rest}
+    >
+      <div
+        className="pointer-events-none absolute inset-0 transition-opacity duration-300"
+        style={{
+          opacity: glow.active ? 1 : 0,
+          background: `radial-gradient(220px circle at ${glow.x}% ${glow.y}%, rgba(108,92,231,0.10), transparent 70%)`,
+        }}
+      />
+      {children}
+    </Comp>
+  );
+}
 
 const ACTIVITY_LABEL_KEY: Record<string, 'activityVehicle' | 'activityJobCard' | 'activityWarrantyClaim'> = {
   vehicle: 'activityVehicle',
@@ -57,13 +122,16 @@ function timeAgo(ts: string) {
   return new Date(ts).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 }
 
+function easeInOutCubic(t: number) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
 /* ---------------- Fleet Performance line chart ---------------- */
 function FleetPerformanceChart({ trend }: { trend: { day: string; jobs?: number; totalJobs?: number }[] }) {
   const raw = (trend?.length ? trend : Array.from({ length: 7 }).map((_, i) => ({ day: String(i), jobs: 0 }))).map((d: any) => ({
     day: d.day,
     value: d.totalJobs ?? d.jobs ?? 0,
   }));
-  // Deterministic "last month" comparison series (70-90% of this month's values, seeded by index)
   const lastMonth = raw.map((d, i) => Math.max(0, Math.round(d.value * (0.65 + ((i * 37) % 30) / 100))));
 
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
@@ -90,7 +158,7 @@ function FleetPerformanceChart({ trend }: { trend: { day: string; jobs?: number;
           <span className="inline-block w-3 h-0.5 rounded-full" style={{ backgroundColor: VIOLET }} /> This Month
         </span>
         <span className="flex items-center gap-1.5" style={{ color: MUTED }}>
-          <span className="inline-block w-3 h-0.5 rounded-full" style={{ backgroundColor: VIOLET_LIGHT, opacity: 0.6, borderTop: `1.5px dashed ${VIOLET_LIGHT}`, backgroundColor: 'transparent' }} /> Last Month
+          <span className="inline-block w-3 h-0.5 rounded-full" style={{ opacity: 0.6, borderTop: `1.5px dashed ${VIOLET_LIGHT}`, backgroundColor: 'transparent' }} /> Last Month
         </span>
       </div>
       <svg
@@ -100,7 +168,6 @@ function FleetPerformanceChart({ trend }: { trend: { day: string; jobs?: number;
         preserveAspectRatio="none"
         onMouseLeave={() => setHoverIdx(null)}
       >
-        {/* last month dashed */}
         <motion.path
           d={pathLast}
           fill="none"
@@ -113,7 +180,6 @@ function FleetPerformanceChart({ trend }: { trend: { day: string; jobs?: number;
           viewport={{ once: true }}
           transition={{ duration: 1.4, ease: 'easeOut' }}
         />
-        {/* this month solid */}
         <motion.path
           d={pathThis}
           fill="none"
@@ -129,7 +195,6 @@ function FleetPerformanceChart({ trend }: { trend: { day: string; jobs?: number;
 
         {raw.map((d, i) => (
           <g key={i}>
-            {/* invisible hover hit area */}
             <rect
               x={i * step - step / 2}
               y={0}
@@ -197,7 +262,6 @@ function ServiceCentersMap({ centers, names }: { centers: number; names?: string
 
   return (
     <div className="relative rounded-xl h-32 mb-3 overflow-hidden" style={{ backgroundColor: LAV_PALE }}>
-      {/* faint street-like lines */}
       <svg className="absolute inset-0 w-full h-full opacity-[0.35]" preserveAspectRatio="none">
         <line x1="0" y1="35%" x2="100%" y2="20%" stroke={VIOLET} strokeWidth="1" />
         <line x1="0" y1="70%" x2="100%" y2="80%" stroke={VIOLET} strokeWidth="1" />
@@ -255,8 +319,165 @@ function AIWaveform() {
   );
 }
 
+/* ---------------- Cinematic scooter intro (auto-plays once on load, large -> lands in hero) ---------------- */
+function ScooterIntro({ targetRef, onDone }: { targetRef: React.RefObject<HTMLDivElement | null>; onDone: (done: boolean) => void }) {
+  const [progress, setProgress] = useState(0);
+  const [rect, setRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+  const [finished, setFinished] = useState(false);
+  const [started, setStarted] = useState(false);
+  const DURATION = 2000; // ms — total intro time
+  const HOLD = 350; // ms — brief pause on the big centered scooter before it starts moving
+
+  useEffect(() => {
+    const measure = () => {
+      const el = targetRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setRect({
+        top: r.top + window.scrollY,
+        left: r.left + window.scrollX,
+        width: r.width,
+        height: r.height,
+      });
+    };
+    measure();
+    window.addEventListener('resize', measure);
+
+    let rafId: number;
+    let startTime: number | null = null;
+
+    const tick = (ts: number) => {
+      if (startTime === null) startTime = ts;
+      const elapsed = ts - startTime;
+      setStarted(true);
+
+      if (elapsed < HOLD) {
+        rafId = requestAnimationFrame(tick);
+        return;
+      }
+
+      const t = Math.min((elapsed - HOLD) / DURATION, 1);
+      const eased = easeInOutCubic(t);
+      setProgress(eased);
+
+      if (t >= 1) {
+        // Hold fully-settled for one extra frame before unmounting so the
+        // crossfade with the real hero scooter has zero gap.
+        requestAnimationFrame(() => {
+          setFinished(true);
+          onDone(true);
+        });
+        return;
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      window.removeEventListener('resize', measure);
+      cancelAnimationFrame(rafId);
+      document.body.style.overflow = '';
+    };
+  }, [targetRef, onDone]);
+
+  if (!rect || finished) return null;
+
+  const initialWidth = Math.min(window.innerWidth * 0.58, 620);
+  const viewportCenterX = window.innerWidth / 2;
+  const viewportCenterY = window.innerHeight / 2;
+  const targetCenterX = rect.left + rect.width / 2;
+  const targetCenterY = rect.top + rect.height / 2 - window.scrollY;
+
+  const currentWidth = initialWidth + (rect.width - initialWidth) * progress;
+  const currentX = viewportCenterX + (targetCenterX - viewportCenterX) * progress;
+  const currentY = viewportCenterY + (targetCenterY - viewportCenterY) * progress;
+
+  // Crossfade window: overlay starts fading out only in the very last
+  // sliver of the animation, exactly matching the hero scooter's fade-in,
+  // so there's never a frame where both are invisible.
+  const overlayOpacity = 1 - Math.max(progress - 0.97, 0) / 0.03;
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        pointerEvents: 'none',
+        zIndex: 60,
+        overflow: 'hidden',
+        opacity: overlayOpacity,
+        background: 'linear-gradient(135deg, #EEE9FF 0%, #E2DAFF 45%, #F2EFFF 100%)',
+      }}
+    >
+      {/* clean bright circle glow behind the scooter, matches the hero card */}
+      <div
+        className="absolute rounded-full"
+        style={{
+          width: 640,
+          height: 640,
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-20%, -50%)',
+          background: `radial-gradient(circle, rgba(255,255,255,0.9) 0%, ${VIOLET_LIGHT}55 28%, ${VIOLET_LIGHT}22 55%, transparent 75%)`,
+        }}
+      />
+      {/* ground shadow spotlight under the scooter's start position */}
+      <div
+        style={{
+          position: 'absolute',
+          top: viewportCenterY + 130,
+          left: viewportCenterX,
+          width: 260,
+          height: 40,
+          transform: `translate(-50%, -50%) scale(${1 - progress * 0.6})`,
+          borderRadius: '50%',
+          background: 'radial-gradient(ellipse, rgba(21,21,42,0.22), transparent 70%)',
+          opacity: 1 - progress,
+        }}
+      />
+      {/* brand wordmark, fades as scooter departs */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: `translate(-50%, ${(-currentWidth * 0.6)}px)`,
+          textAlign: 'center',
+          opacity: started ? Math.max(1 - progress * 1.6, 0) : 0,
+          transition: 'opacity 0.2s linear',
+        }}
+      >
+        <p className="text-xs font-bold tracking-[0.3em]" style={{ color: VIOLET }}>AERYS</p>
+        <p className="text-[10px] tracking-[0.2em]" style={{ color: MUTED }}>NEXT-GEN ELECTRIC MOBILITY</p>
+      </div>
+
+      <div
+        style={{
+          position: 'absolute',
+          top: currentY,
+          left: currentX,
+          width: currentWidth,
+          transform: 'translate(-50%, -50%)',
+          filter: `drop-shadow(0 ${30 - progress * 20}px ${40 - progress * 20}px rgba(21,21,42,${0.22 - progress * 0.1}))`,
+        }}
+      >
+        <Image
+          src="/hero-scooter.png"
+          alt="AERYS scooter"
+          width={800}
+          height={800}
+          className="object-contain w-full h-auto"
+          priority
+        />
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- Hero with scroll-driven scooter ---------------- */
-function AerysHero({ name, welcomeLabel }: { name: string; welcomeLabel: string }) {
+function AerysHero({ name, welcomeLabel, scooterTargetRef, scooterVisible }: { name: string; welcomeLabel: string; scooterTargetRef?: React.RefObject<HTMLDivElement | null>; scooterVisible?: boolean }) {
   const { scrollY } = useScroll();
   const scooterScale = useTransform(scrollY, [0, 260], [1.08, 1]);
   const scooterY = useTransform(scrollY, [0, 260], [0, -6]);
@@ -272,22 +493,35 @@ function AerysHero({ name, welcomeLabel }: { name: string; welcomeLabel: string 
         height: 360,
       }}
     >
-      <div className="absolute inset-0 opacity-[0.04]" style={{
-        backgroundImage: 'radial-gradient(#6C5CE7 1px, transparent 1px)', backgroundSize: '22px 22px',
-      }} />
+      {/* large soft glow behind scooter — one clean bright circle, gently pulsing */}
       <motion.div
-        className="absolute w-[440px] h-[440px] rounded-full"
-        style={{ background: `radial-gradient(circle, ${VIOLET_LIGHT}55, transparent 70%)`, right: '12%', top: '-14%' }}
-        animate={{ opacity: [0.5, 0.8, 0.5] }}
+        className="absolute rounded-full"
+        style={{
+          width: 620,
+          height: 620,
+          right: '2%',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          background: `radial-gradient(circle, rgba(255,255,255,0.9) 0%, ${VIOLET_LIGHT}55 28%, ${VIOLET_LIGHT}22 55%, transparent 75%)`,
+        }}
+        animate={{ opacity: [0.9, 1, 0.9] }}
         transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
       />
       <div
-        className="absolute w-[300px] h-[300px] rounded-full"
-        style={{ background: `radial-gradient(circle, ${VIOLET}33, transparent 70%)`, left: '2%', bottom: '-16%' }}
+        className="absolute w-[260px] h-[260px] rounded-full"
+        style={{ background: `radial-gradient(circle, ${VIOLET}22, transparent 70%)`, left: '-4%', bottom: '-20%' }}
       />
       <div
-        className="absolute w-[220px] h-[220px] rounded-full"
-        style={{ background: `radial-gradient(circle, ${VIOLET_LIGHT}44, transparent 70%)`, right: '38%', bottom: '-12%' }}
+        className="absolute"
+        style={{
+          top: 0,
+          left: '20%',
+          width: '40%',
+          height: '55%',
+          backgroundImage: 'radial-gradient(#6C5CE7 1px, transparent 1px)',
+          backgroundSize: '20px 20px',
+          opacity: 0.05,
+        }}
       />
 
       <div className="relative w-full flex flex-col lg:flex-row items-center justify-between px-8 sm:px-12 gap-4">
@@ -296,11 +530,16 @@ function AerysHero({ name, welcomeLabel }: { name: string; welcomeLabel: string 
           <h1 className="text-2xl sm:text-[30px] font-extrabold leading-tight" style={{ color: INK }}>Here is the</h1>
           <h1 className="text-4xl sm:text-[50px] font-extrabold leading-none mb-5" style={{ color: INK }}>FUTURE</h1>
           <div className="flex items-center gap-4">
-            <button className="px-6 py-2.5 rounded-xl text-sm font-semibold border-2 transition-transform hover:-translate-y-0.5" style={{ borderColor: VIOLET, color: VIOLET, backgroundColor: '#fff' }}>
+            <button
+              className="px-6 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all duration-200 hover:-translate-y-0.5"
+              style={{ borderColor: VIOLET, color: VIOLET, backgroundColor: '#fff', boxShadow: '0 0 0 rgba(108,92,231,0)' }}
+              onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 8px 20px -6px rgba(108,92,231,0.45)'; e.currentTarget.style.backgroundColor = VIOLET; e.currentTarget.style.color = '#fff'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 0 0 rgba(108,92,231,0)'; e.currentTarget.style.backgroundColor = '#fff'; e.currentTarget.style.color = VIOLET; }}
+            >
               Pre-order
             </button>
-            <button className="flex items-center gap-2 text-sm font-medium" style={{ color: INK }}>
-              <span className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: '#fff', color: VIOLET }}>▶</span>
+            <button className="group flex items-center gap-2 text-sm font-medium" style={{ color: INK }}>
+              <span className="w-8 h-8 rounded-full flex items-center justify-center transition-transform duration-200 group-hover:scale-110" style={{ backgroundColor: '#fff', color: VIOLET }}>▶</span>
               Watch Video
             </button>
           </div>
@@ -312,10 +551,11 @@ function AerysHero({ name, welcomeLabel }: { name: string; welcomeLabel: string 
         </motion.div>
 
         <motion.div
-          initial={{ opacity: 0, scale: 1.08 }}
-          animate={{ opacity: 1 }}
-          style={{ scale: scooterScale, y: scooterY }}
-          transition={{ opacity: { delay: 0.2, duration: 0.8 } }}
+          ref={scooterTargetRef}
+          initial={false}
+          animate={{ opacity: scooterVisible ? 1 : 0 }}
+          style={{ scale: scooterVisible ? scooterScale : 1, y: scooterVisible ? scooterY : 0 }}
+          transition={{ opacity: { duration: 0.2, ease: 'linear' } }}
           className="relative w-[300px] sm:w-[420px] shrink-0 self-end"
         >
           <motion.div
@@ -361,6 +601,8 @@ export default function Home() {
   const role = (session?.user as any)?.role || '';
   const name = session?.user?.name || 'there';
   const { t } = useLanguage();
+  const scooterTargetRef = useRef<HTMLDivElement>(null);
+  const [scooterIntroDone, setScooterIntroDone] = useState(false);
 
   useEffect(() => {
     fetch('/api/homepage-stats')
@@ -387,6 +629,12 @@ export default function Home() {
           background-image:
             radial-gradient(circle at 15% 10%, rgba(108,92,231,0.06), transparent 40%),
             radial-gradient(circle at 90% 25%, rgba(108,92,231,0.04), transparent 35%);
+          background-size: 140% 140%;
+          animation: bgShift 18s ease-in-out infinite;
+        }
+        @keyframes bgShift {
+          0%, 100% { background-position: 0% 0%, 100% 0%; }
+          50% { background-position: 10% 10%, 90% 15%; }
         }
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(14px); }
@@ -401,7 +649,8 @@ export default function Home() {
             <p className="mb-4"><Link href="/login" style={{ color: VIOLET }}>Log in</Link></p>
           )}
 
-          <AerysHero name={name} welcomeLabel={t('welcomeBack')} />
+          <ScooterIntro targetRef={scooterTargetRef} onDone={setScooterIntroDone} />
+          <AerysHero name={name} welcomeLabel={t('welcomeBack')} scooterTargetRef={scooterTargetRef} scooterVisible={scooterIntroDone} />
 
           {/* 5 KPI cards */}
           <motion.div
@@ -421,28 +670,31 @@ export default function Home() {
               <motion.div
                 key={c.label}
                 variants={{ hidden: { opacity: 0, y: 25, scale: 0.97 }, show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } } }}
-                className="group relative rounded-[16px] p-5 border overflow-hidden transition-all duration-200"
-                style={{ borderColor: BORDER, boxShadow: CARD_SHADOW, backgroundColor: '#fff' }}
-                onMouseEnter={(e) => { e.currentTarget.style.boxShadow = CARD_SHADOW_HOVER; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.borderColor = `${VIOLET}55`; }}
-                onMouseLeave={(e) => { e.currentTarget.style.boxShadow = CARD_SHADOW; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = BORDER; }}
               >
-                <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 mb-3 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6" style={{ backgroundColor: LAV }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke={VIOLET} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                    <path d={c.icon} />
-                  </svg>
-                </span>
-                <p className="text-xs font-medium mb-1" style={{ color: MUTED }}>{c.label}</p>
-                <p className="text-2xl font-extrabold tabular-nums tracking-tight mb-2" style={{ color: INK }}>
-                  {loading ? '—' : <CountUp value={c.value ?? 0} />}
-                </p>
-                <SparkLine color={VIOLET} />
+                <TiltCard
+                  className="group rounded-[16px] p-5 border"
+                  style={{ borderColor: BORDER, boxShadow: CARD_SHADOW, backgroundColor: '#fff' }}
+                  onMouseEnter={(e: any) => { e.currentTarget.style.boxShadow = CARD_SHADOW_HOVER; e.currentTarget.style.borderColor = `${VIOLET}55`; }}
+                  onMouseLeave={(e: any) => { e.currentTarget.style.boxShadow = CARD_SHADOW; e.currentTarget.style.borderColor = BORDER; }}
+                >
+                  <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 mb-3 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6" style={{ backgroundColor: LAV }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke={VIOLET} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                      <path d={c.icon} />
+                    </svg>
+                  </span>
+                  <p className="text-xs font-medium mb-1" style={{ color: MUTED }}>{c.label}</p>
+                  <p className="text-2xl font-extrabold tabular-nums tracking-tight mb-2" style={{ color: INK }}>
+                    {loading ? '—' : <CountUp value={c.value ?? 0} />}
+                  </p>
+                  <SparkLine color={VIOLET} />
+                </TiltCard>
               </motion.div>
             ))}
           </motion.div>
 
           {/* Fleet Overview | Recent Activity | Quick Actions */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
-            <div className="rounded-[16px] p-6 bg-white border fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+            <TiltCard className="rounded-[16px] p-6 bg-white border fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
               <p className="text-[15px] font-bold mb-4" style={{ color: INK }}>{t('vehicleOverview')}</p>
               <div className="flex items-center gap-6 flex-wrap">
                 <DonutChart
@@ -470,9 +722,9 @@ export default function Home() {
                 </div>
               </div>
               <Link href="/vehicles" className="text-xs font-semibold mt-5 inline-flex items-center gap-1" style={{ color: VIOLET }}>{t('viewFullReport')}</Link>
-            </div>
+            </TiltCard>
 
-            <div className="rounded-[16px] p-6 bg-white border fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+            <TiltCard className="rounded-[16px] p-6 bg-white border fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
               <p className="text-[15px] font-bold mb-4" style={{ color: INK }}>{t('recentActivity')}</p>
               <div className="relative">
                 {stats?.recentActivity?.length ? (
@@ -503,11 +755,29 @@ export default function Home() {
                       );
                     })}
                   </div>
-                ) : <p className="text-xs" style={{ color: MUTED }}>{t('noRecentActivity')}</p>}
+                ) : (
+                  <motion.div
+                    className="flex flex-col items-center justify-center py-6 text-center"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                  >
+                    <motion.span
+                      className="w-10 h-10 rounded-full flex items-center justify-center mb-2"
+                      style={{ backgroundColor: LAV_PALE }}
+                      animate={{ scale: [1, 1.06, 1] }}
+                      transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={VIOLET} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 8v4l3 3M12 22a10 10 0 100-20 10 10 0 000 20z" />
+                      </svg>
+                    </motion.span>
+                    <p className="text-xs" style={{ color: MUTED }}>{t('noRecentActivity')}</p>
+                  </motion.div>
+                )}
               </div>
-            </div>
+            </TiltCard>
 
-            <div className="rounded-[16px] p-6 bg-white border fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+            <TiltCard className="rounded-[16px] p-6 bg-white border fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
               <p className="text-[15px] font-bold mb-4" style={{ color: INK }}>{t('quickActions')}</p>
               <div className="space-y-3">
                 {[
@@ -539,17 +809,17 @@ export default function Home() {
                   </Link>
                 ))}
               </div>
-            </div>
+            </TiltCard>
           </div>
 
           {/* Fleet Performance | Service Centers | AI Assistant */}
           <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr_0.9fr] gap-4 mb-5">
-            <div className="rounded-[16px] p-6 bg-white border fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+            <TiltCard className="rounded-[16px] p-6 bg-white border fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
               <p className="text-[15px] font-bold mb-4" style={{ color: INK }}>{t('vehiclePerformance')}</p>
               <FleetPerformanceChart trend={stats?.jobsToday !== undefined ? (stats?.jobsTrend ?? []) : []} />
-            </div>
+            </TiltCard>
 
-            <div className="rounded-[16px] p-6 bg-white border fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+            <TiltCard className="rounded-[16px] p-6 bg-white border fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
               <p className="text-[15px] font-bold mb-4" style={{ color: INK }}>{t('serviceCenters')}</p>
               <ServiceCentersMap centers={stats?.dealerLeaderboard?.length ?? 0} />
               <div className="flex items-center justify-between text-sm">
@@ -562,13 +832,13 @@ export default function Home() {
                   <p className="text-[10px]" style={{ color: MUTED }}>{t('activeToday')}</p>
                 </div>
               </div>
-            </div>
+            </TiltCard>
 
-            <div className="rounded-[16px] p-6 fade-up" style={{ backgroundColor: LAV, boxShadow: CARD_SHADOW }}>
+            <TiltCard className="rounded-[16px] p-6 fade-up" style={{ backgroundColor: LAV, boxShadow: CARD_SHADOW }}>
               <p className="text-[15px] font-bold mb-2" style={{ color: VIOLET }}>{t('aiAssistant')}</p>
               <p className="text-xs mb-4" style={{ color: MUTED }}>{t('aiAssistantDesc')}</p>
               <AIWaveform />
-            </div>
+            </TiltCard>
           </div>
 
           {/* Dealer leaderboard (below primary layout) */}

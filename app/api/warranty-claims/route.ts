@@ -1,10 +1,49 @@
-import { pool } from '../../lib/db';
+import { pool } from '@/app/lib/db';
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 
 function generateClaimNumber() {
   const ts = Date.now().toString(36).toUpperCase();
   return `WC-${ts}`;
+}
+
+const OPEN_CLAIM_STATUSES = ['submitted', 'dealer_approved', 'company_approved'];
+
+// Fraud/duplicate detection:
+// 1. Same vehicle + same component already has an OPEN claim -> block (duplicate)
+// 2. Same vehicle + same component was REJECTED and re-submitted within 7 days -> flag as suspicious
+async function checkForDuplicateOrFraud(vehicleId: number, component: string) {
+  const [rows]: any = await pool.query(
+    `SELECT claim_id, claim_number, status, submitted_at, resolved_at
+     FROM warranty_claims
+     WHERE vehicle_id = ? AND component = ? AND deleted_at IS NULL
+     ORDER BY submitted_at DESC
+     LIMIT 5`,
+    [vehicleId, component]
+  );
+
+  const openClaim = rows.find((r: any) => OPEN_CLAIM_STATUSES.includes(r.status));
+  if (openClaim) {
+    return {
+      blocked: true,
+      reason: `An open claim (${openClaim.claim_number}) already exists for this component. Please wait for it to be resolved before filing a new one.`,
+    };
+  }
+
+  const recentRejected = rows.find((r: any) => {
+    if (r.status !== 'rejected' || !r.resolved_at) return false;
+    const daysSinceRejection = (Date.now() - new Date(r.resolved_at).getTime()) / (1000 * 60 * 60 * 24);
+    return daysSinceRejection <= 7;
+  });
+  if (recentRejected) {
+    return {
+      blocked: false,
+      flagged: true,
+      reason: `This component's claim (${recentRejected.claim_number}) was rejected within the last 7 days and is being resubmitted.`,
+    };
+  }
+
+  return { blocked: false, flagged: false };
 }
 
 export async function POST(request: Request) {
@@ -68,16 +107,34 @@ export async function POST(request: Request) {
     }
 
     const warrantyStatusAtClaim = new Date(warrantyEnd) >= new Date() ? 'covered' : 'expired';
+
+    // --- Fraud / duplicate check ---
+    const duplicateCheck = await checkForDuplicateOrFraud(vehicle.vehicle_id, component);
+    if (duplicateCheck.blocked) {
+      return NextResponse.json(
+        { success: false, error: duplicateCheck.reason },
+        { status: 409 }
+      );
+    }
+
     const claimNumber = generateClaimNumber();
+    const finalRemarks = duplicateCheck.flagged
+      ? `${remarks ?? ''}\n[SYSTEM FLAG: ${duplicateCheck.reason}]`.trim()
+      : remarks ?? null;
 
     await pool.query(
       `INSERT INTO warranty_claims
-        (claim_number, job_card_id, vehicle_id, component, warranty_status_at_claim, remarks, status)
-       VALUES (?, ?, ?, ?, ?, ?, 'submitted')`,
-      [claimNumber, jobCardId, vehicle.vehicle_id, component, warrantyStatusAtClaim, remarks ?? null]
+        (claim_number, job_card_id, vehicle_id, component, warranty_status_at_claim, remarks, status, is_flagged)
+       VALUES (?, ?, ?, ?, ?, ?, 'submitted', ?)`,
+      [claimNumber, jobCardId, vehicle.vehicle_id, component, warrantyStatusAtClaim, finalRemarks, duplicateCheck.flagged ? 1 : 0]
     );
 
-    return NextResponse.json({ success: true, claimNumber });
+    return NextResponse.json({
+      success: true,
+      claimNumber,
+      flagged: duplicateCheck.flagged,
+      flagReason: duplicateCheck.flagged ? duplicateCheck.reason : undefined,
+    });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

@@ -1,25 +1,45 @@
-// app/components/CountUp.tsx
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useInView, animate } from 'framer-motion';
+
+function easeInOutCubic(t: number) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
 
 export function CountUp({ value, duration = 1.2 }: { value: number | undefined; duration?: number }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const isInView = useInView(ref, { once: true, margin: '-50px' });
-  const [display, setDisplay] = useState(0);
-  const hasAnimated = useRef(false);
+  const [display, setDisplay] = useState(value ?? 0);
+  const displayRef = useRef(display);
 
   useEffect(() => {
-    if (!isInView || value === undefined || hasAnimated.current) return;
-    hasAnimated.current = true;
-    const controls = animate(0, value, {
-      duration,
-      ease: [0.16, 1, 0.3, 1],
-      onUpdate: (v) => setDisplay(Math.round(v)),
-    });
-    return () => controls.stop();
-  }, [isInView, value, duration]);
+    displayRef.current = display;
+  }, [display]);
 
-  return <span ref={ref}>{value === undefined ? '—' : display}</span>;
+  useEffect(() => {
+    if (value === undefined) return;
+    let frame = 0;
+    const startValue = displayRef.current;
+
+    if (startValue === value) {
+      setDisplay(value);
+      return;
+    }
+
+    const startTime = performance.now();
+    const step = (now: number) => {
+      const progress = Math.min((now - startTime) / (duration * 1000), 1);
+      const eased = easeInOutCubic(progress);
+      const nextValue = startValue + (value - startValue) * eased;
+      setDisplay(Math.round(nextValue));
+
+      if (progress < 1) {
+        frame = requestAnimationFrame(step);
+      }
+    };
+
+    frame = requestAnimationFrame(step);
+
+    return () => cancelAnimationFrame(frame);
+  }, [value, duration]);
+
+  return <span>{value === undefined ? '—' : display}</span>;
 }
