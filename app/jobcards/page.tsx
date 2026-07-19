@@ -6,8 +6,8 @@ import { useSession } from 'next-auth/react';
 import { ResponsiveLayout } from '@/app/components/ResponsiveLayout';
 import { NAV_ITEMS } from '@/app/lib/nav-items';
 import Link from 'next/link';
-import { TechnicianLocationSender } from '@/app/components/TechnicianLocationSender';
 import { VoiceInput } from '@/app/components/VoiceInput';
+import { LocationCapture, LocationValue } from '@/app/components/LocationCapture';
 
 const VIOLET = '#6C5CE7';
 const VIOLET_LIGHT = '#8B7CF8';
@@ -69,6 +69,7 @@ export default function JobCardsPage() {
 
   const [form, setForm] = useState({ chassisNumber: '', complaintText: '', serviceType: 'paid', partCategory: '', symptomType: '', priority: 'normal' });
   const [photos, setPhotos] = useState<File[]>([]);
+  const [location, setLocation] = useState<LocationValue>({ latitude: null, longitude: null, addressText: '', source: null });
   const [message, setMessage] = useState('');
   const [jobCards, setJobCards] = useState<any[]>([]);
   const [technicians, setTechnicians] = useState<any[]>([]);
@@ -157,7 +158,12 @@ export default function JobCardsPage() {
     const res = await fetch('/api/jobcards', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        ...form,
+        destLatitude: location.latitude,
+        destLongitude: location.longitude,
+        destAddressText: location.addressText || null,
+      }),
     });
     const json = await res.json();
     if (json.success) {
@@ -175,6 +181,7 @@ export default function JobCardsPage() {
       setMessage('Job card created!');
       setForm({ chassisNumber: '', complaintText: '', serviceType: 'paid', partCategory: '', symptomType: '', priority: 'normal' });
       setPhotos([]);
+      setLocation({ latitude: null, longitude: null, addressText: '', source: null });
       setWarranty(null);
       loadJobCards();
     } else {
@@ -799,6 +806,10 @@ export default function JobCardsPage() {
               </div>
 
               <div className="md:col-span-3">
+                <LocationCapture value={location} onChange={setLocation} />
+              </div>
+
+              <div className="md:col-span-3">
                 <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Photos (optional, max 5)</label>
                 <input type="file" accept="image/*" multiple onChange={handlePhotoSelect} disabled={photos.length >= 5}
                   className="w-full rounded-2xl px-4 py-3 text-sm outline-none" style={inputStyle} />
@@ -816,7 +827,7 @@ export default function JobCardsPage() {
             </div>
 
             <div className="flex justify-end gap-3 mt-6">
-              <button type="button" onClick={() => { setForm({ chassisNumber: '', complaintText: '', serviceType: 'paid', partCategory: '', symptomType: '', priority: 'normal' }); setPhotos([]); }}
+              <button type="button" onClick={() => { setForm({ chassisNumber: '', complaintText: '', serviceType: 'paid', partCategory: '', symptomType: '', priority: 'normal' }); setPhotos([]); setLocation({ latitude: null, longitude: null, addressText: '', source: null }); }}
                 className="px-5 py-2.5 rounded-xl text-sm font-medium border" style={{ borderColor: BORDER, color: INK }}>
                 Reset
               </button>
@@ -906,11 +917,6 @@ export default function JobCardsPage() {
                         {isOverSla && <p className="text-[10px] font-semibold" style={{ color: RED }}>⚠ SLA breach</p>}
                       </td>
                       <td className="px-5 py-3">
-                        {role === 'technician' && ['technician_assigned', 'in_progress'].includes(jc.status) && (
-                          <div className="mb-1.5">
-                            <TechnicianLocationSender jobCardId={jc.job_card_id} active={true} />
-                          </div>
-                        )}
                         {renderActions(jc)}
                       </td>
                       <td className="px-5 py-3">

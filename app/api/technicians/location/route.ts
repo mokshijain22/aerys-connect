@@ -218,6 +218,8 @@ export async function GET(request: Request) {
         distanceKm: distanceKm !== null ? Math.round(distanceKm * 10) / 10 : null,
         etaMinutes,
         hasDestination: jc.dest_latitude != null,
+        destLatitude: jc.dest_latitude != null ? Number(jc.dest_latitude) : null,
+        destLongitude: jc.dest_longitude != null ? Number(jc.dest_longitude) : null,
       },
     });
   } catch (error: any) {

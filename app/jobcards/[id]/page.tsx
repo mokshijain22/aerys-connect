@@ -160,6 +160,24 @@ export default function JobCardDetailPage() {
           <dd className="text-sm" style={{ color: INK }}>{jc.complaint_text}</dd>
         </div>
 
+        {(jc.dest_address_text || jc.dest_latitude) && (
+          <div className="mb-6">
+            <dt className="text-sm mb-1" style={{ color: MUTED }}>Service location</dt>
+            <dd className="text-sm" style={{ color: INK }}>
+              {jc.dest_address_text || 'Shared via GPS'}
+              {jc.dest_latitude && (
+                
+                  <a href={`https://www.google.com/maps?q=${jc.dest_latitude},${jc.dest_longitude}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="ml-2 text-xs font-semibold" style={{ color: VIOLET }}
+                >
+                  View on map →
+                </a>
+              )}
+            </dd>
+          </div>
+        )}
+
         {complaintPhotos.length > 0 && (
           <div className="mb-6">
             <dt className="text-sm mb-2" style={{ color: MUTED }}>Complaint photos</dt>

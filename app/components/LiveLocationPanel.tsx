@@ -22,6 +22,8 @@ type LocationData = {
   distanceKm: number | null;
   etaMinutes: number | null;
   hasDestination: boolean;
+  destLatitude: number | null;
+  destLongitude: number | null;
 };
 
 /**
@@ -132,6 +134,18 @@ export function LiveLocationPanel({ jobCardId, active, role }: { jobCardId: numb
 
       {data && (
         <div className="space-y-3">
+          <div className="rounded-xl overflow-hidden border" style={{ borderColor: BORDER }}>
+            <iframe
+              title="technician-live-map"
+              className="w-full h-48 border-0"
+              loading="lazy"
+              src={
+                data.hasDestination && data.destLatitude != null
+                  ? `https://www.google.com/maps?saddr=${data.latitude},${data.longitude}&daddr=${data.destLatitude},${data.destLongitude}&output=embed`
+                  : `https://www.google.com/maps?q=${data.latitude},${data.longitude}&z=15&output=embed`
+              }
+            />
+          </div>
           <div className="flex items-center gap-3">
             <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-xs font-bold" style={{ backgroundColor: VIOLET_DIM, color: VIOLET }}>
               {data.technicianName?.slice(0, 2).toUpperCase()}

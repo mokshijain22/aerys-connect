@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { ROLE_ACCESS } from '@/app/lib/role-access';
 import { useLanguage } from '@/app/lib/LanguageContext';
+import { TechnicianLocationSender } from '@/app/components/TechnicianLocationSender';
+import { SOSButton } from '@/app/components/SOSButton';
+import { SOSAlertsBanner } from '@/app/components/SOSAlertsBanner';
 
 const VIOLET = '#6C5CE7';
 const VIOLET_LIGHT = '#8B7CF8';
@@ -201,6 +204,12 @@ export function ResponsiveLayout({ navItems, children, sidebarFooter }: Responsi
             </button>
           </div>
         </div>
+
+        {role === 'technician' && (
+          <div className="px-2 mb-2">
+            <TechnicianLocationSender />
+          </div>
+        )}
 
         {/* Sidebar footer content */}
         {sidebarFooter && <div className="mt-4">{sidebarFooter}</div>}
@@ -414,8 +423,10 @@ export function ResponsiveLayout({ navItems, children, sidebarFooter }: Responsi
         </div>
 
         <div className="px-4 md:px-6 pb-4 pt-4 md:pt-6 flex-1">
+          {(role === 'dealer' || role === 'super_admin') && <SOSAlertsBanner />}
           {children}
         </div>
+        {(role === 'technician' || role === 'customer') && <SOSButton />}
       </main>
     </div>
   );

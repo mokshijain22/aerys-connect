@@ -10,7 +10,10 @@ let lastAutoAssignRun = 0;
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const { chassisNumber, complaintText, serviceType, partCategory, symptomType, priority } = body;
+  const {
+    chassisNumber, complaintText, serviceType, partCategory, symptomType, priority,
+    destLatitude, destLongitude, destAddressText,
+  } = body;
 
   const session = await auth();
   const role = (session?.user as any)?.role || '';
@@ -44,10 +47,21 @@ export async function POST(request: Request) {
       );
     }
 
+    const hasCoords = typeof destLatitude === 'number' && typeof destLongitude === 'number';
+
     const [result]: any = await pool.query(
-      `INSERT INTO job_cards (vehicle_id, dealer_id, complaint_text, service_type, part_category, symptom_type, priority, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'registered')`,
-      [vehicle.vehicle_id, vehicle.dealer_id, complaintText, serviceType, partCategory || null, symptomType || null, priority || 'normal']
+      `INSERT INTO job_cards
+        (vehicle_id, dealer_id, complaint_text, service_type, part_category, symptom_type, priority, status,
+         dest_latitude, dest_longitude, dest_address_text, dest_captured_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'registered', ?, ?, ?, ?)`,
+      [
+        vehicle.vehicle_id, vehicle.dealer_id, complaintText, serviceType,
+        partCategory || null, symptomType || null, priority || 'normal',
+        hasCoords ? destLatitude : null,
+        hasCoords ? destLongitude : null,
+        destAddressText || null,
+        (hasCoords || destAddressText) ? new Date() : null,
+      ]
     );
 
     return NextResponse.json({ success: true, jobCardId: result.insertId });
