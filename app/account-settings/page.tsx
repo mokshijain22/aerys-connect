@@ -25,6 +25,15 @@ const ROLE_LABEL: Record<string, string> = {
   customer: 'Customer',
 };
 
+const pageBgStyle = `
+  .page-bg {
+    background-color: #FAFAFF;
+    background-image:
+      radial-gradient(circle at 15% 10%, rgba(108,92,231,0.07), transparent 40%),
+      radial-gradient(circle at 90% 25%, rgba(245,166,35,0.05), transparent 35%);
+  }
+`;
+
 export default function AccountSettingsPage() {
   const { data: session } = useSession();
   const role = (session?.user as any)?.role || '';
@@ -123,6 +132,8 @@ export default function AccountSettingsPage() {
   const inputStyle = { border: `1px solid ${BORDER}`, backgroundColor: '#fff', color: INK };
 
   return (
+    <>
+      <style jsx global>{pageBgStyle}</style>
     <ResponsiveLayout navItems={NAV}>
       <div className="page-bg -m-4 md:-m-6 p-4 md:p-6">
         <div className="flex items-center gap-1.5 text-xs mb-4" style={{ color: MUTED }}>
@@ -242,5 +253,6 @@ export default function AccountSettingsPage() {
         )}
       </div>
     </ResponsiveLayout>
+    </>
   );
 }

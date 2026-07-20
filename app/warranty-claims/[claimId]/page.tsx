@@ -226,7 +226,7 @@ export default function ClaimDetailPage() {
 
         {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
 
-        <div className="flex gap-3 pt-4 border-t border-slate-100">
+        <div className="flex flex-wrap gap-3 pt-4 border-t border-slate-100">
           {claim.status === 'submitted' && (
             <>
               <button

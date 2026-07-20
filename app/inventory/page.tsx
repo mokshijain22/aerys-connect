@@ -264,7 +264,7 @@ export default function InventoryPage() {
                 );
               })}
               {loading && (
-                <tr><td colSpan={7} className="px-5 py-8 text-center text-sm" style={{ color: MUTED }}>No items match your search.</td></tr>
+                <tr><td colSpan={7} className="px-5 py-8 text-center text-sm" style={{ color: MUTED }}>Loading...</td></tr>
               )}
               {!loading && paged.length === 0 && (
                 <tr><td colSpan={7} className="px-5 py-8 text-center text-sm" style={{ color: MUTED }}>No items match your search.</td></tr>
@@ -291,7 +291,7 @@ export default function InventoryPage() {
       </div>
     {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}>
-          <div className="bg-white rounded-[20px] p-7 w-full max-w-md" style={{ boxShadow: CARD_SHADOW_HOVER }}>
+          <div className="bg-white rounded-[20px] p-7 w-full max-w-md max-h-[90vh] overflow-y-auto" style={{ boxShadow: CARD_SHADOW_HOVER }}>
             <div className="flex items-center justify-between mb-4">
               <p className="font-bold text-lg" style={{ color: INK }}>Add Item</p>
               <button onClick={() => setShowAddModal(false)} style={{ color: MUTED }}>✕</button>

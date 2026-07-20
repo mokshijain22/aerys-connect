@@ -28,6 +28,7 @@ const NAV_ICONS: Record<string, string> = {
   '/technicians': 'M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM22 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75',
   '/inventory': 'M3 7l9-4 9 4-9 4-9-4zM3 7v10l9 4 9-4V7M12 11v10',
   '/analytics': 'M4 19V5m5 14V9m5 10V3m5 16v-8',
+  '/whatsapp-inbox': 'M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z',
   '/settings': 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1.03 1.56V21a2 2 0 11-4 0v-.09A1.7 1.7 0 008 19.35a1.7 1.7 0 00-1.87.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.7 1.7 0 003.65 15 1.7 1.7 0 002.09 14H2a2 2 0 110-4h.09A1.7 1.7 0 003.65 9a1.7 1.7 0 00-.34-1.87l-.06-.06a2 2 0 112.83-2.83l.06.06A1.7 1.7 0 007 4.65 1.7 1.7 0 008.03 3.1V3a2 2 0 114 0v.09c0 .69.4 1.32 1.03 1.56.6.24 1.3.12 1.87-.34l.06-.06a2 2 0 112.83 2.83l-.06.06A1.7 1.7 0 0015.35 9c.24.6.87 1 1.56 1H21a2 2 0 110 4h-.09c-.69 0-1.32.4-1.56 1.03z',
 };
 
@@ -260,7 +261,7 @@ export function ResponsiveLayout({ navItems, children, sidebarFooter }: Responsi
       <main className="flex-1 min-w-0 overflow-auto pt-20 md:pt-0 flex flex-col">
         {/* Top bar */}
         <div
-          className="hidden md:flex items-center justify-between gap-4 px-6 sticky top-0 z-10 mx-7 mt-4 rounded-2xl"
+          className="flex items-center justify-between gap-4 px-4 md:px-6 sticky top-0 z-10 mx-3 md:mx-7 mt-4 rounded-2xl"
           style={{
             height: 68,
             background: '#fff',
@@ -268,7 +269,7 @@ export function ResponsiveLayout({ navItems, children, sidebarFooter }: Responsi
             boxShadow: '0 2px 10px -4px rgba(20,10,50,0.08)',
           }}
         >
-          <div className="relative" style={{ flex: '0 0 350px', maxWidth: 350 }} ref={searchRef}>
+          <div className="relative hidden sm:block" style={{ flex: '0 0 350px', maxWidth: 350 }} ref={searchRef}>
             <svg
               width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2"
               className="absolute left-4 top-1/2 -translate-y-1/2"

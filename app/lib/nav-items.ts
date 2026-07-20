@@ -8,6 +8,7 @@ export const NAV_ITEMS = [
   { label: 'Technicians', href: '/technicians', key: 'technicians' as const },
   { label: 'Live Map', href: '/live-map', key: 'liveMap' as const },
   { label: 'Pan India', href: '/pan-india', key: 'panIndia' as const },
+  { label: 'WhatsApp Inbox', href: '/whatsapp-inbox', key: 'whatsappInbox' as const },
   { label: 'Inventory', href: '/inventory', key: 'inventory' as const },
   { label: 'Analytics', href: '/analytics', key: 'analytics' as const },
   { label: 'Settings', href: '/settings', key: 'settings' as const },

@@ -97,11 +97,43 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const { dealerId, isApproved } = await request.json();
+    const session = await auth();
+    const role = (session?.user as any)?.role || '';
+    if (role !== 'super_admin') {
+      return NextResponse.json({ success: false, error: 'Only super admin can edit dealers' }, { status: 403 });
+    }
+
+    const { dealerId, isApproved, dealerName, phone, address, cityName } = await request.json();
+
+    // Toggle active/inactive (existing behaviour)
+    if (isApproved !== undefined && dealerName === undefined) {
+      await pool.query(
+        `UPDATE dealers SET is_approved = ?, approved_at = ? WHERE dealer_id = ?`,
+        [isApproved ? 1 : 0, isApproved ? new Date() : null, dealerId]
+      );
+      return NextResponse.json({ success: true });
+    }
+
+    // Full edit (name/phone/address/city)
+    let cityId: number | undefined;
+    if (cityName) {
+      const [[cityRow]]: any = await pool.query(`SELECT city_id FROM cities WHERE city_name = ?`, [cityName]);
+      if (!cityRow) {
+        return NextResponse.json({ success: false, error: 'Invalid city selected' }, { status: 400 });
+      }
+      cityId = cityRow.city_id;
+    }
+
     await pool.query(
-      `UPDATE dealers SET is_approved = ?, approved_at = ? WHERE dealer_id = ?`,
-      [isApproved ? 1 : 0, isApproved ? new Date() : null, dealerId]
+      `UPDATE dealers SET
+        dealer_name = COALESCE(?, dealer_name),
+        phone = COALESCE(?, phone),
+        address = COALESCE(?, address),
+        city_id = COALESCE(?, city_id)
+       WHERE dealer_id = ?`,
+      [dealerName || null, phone || null, address || null, cityId || null, dealerId]
     );
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

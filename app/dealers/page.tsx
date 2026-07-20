@@ -46,6 +46,10 @@ export default function DealersPage() {
   const [cityFilter, setCityFilter] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [form, setForm] = useState({ dealerName: '', phone: '', address: '', cityName: '' });
+  const [editModal, setEditModal] = useState<Dealer | null>(null);
+  const [editForm, setEditForm] = useState({ dealerName: '', phone: '', address: '', cityName: '' });
+  const [editStateId, setEditStateId] = useState<number | ''>('');
+  const [editSubmitting, setEditSubmitting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [page, setPage] = useState(1);
   const perPage = 6;
@@ -76,6 +80,38 @@ export default function DealersPage() {
       setLoading(false);
     }
   }
+  function openEditModal(d: Dealer) {
+    setEditModal(d);
+    setEditForm({ dealerName: d.dealer_name, phone: d.phone || '', address: d.address || '', cityName: d.city_name });
+    // Try to preselect the state that contains this dealer's city, so the city dropdown works immediately
+    const matchState = states.find((s) => (citiesByState[s.state_id] || []).some((c) => c.city_name === d.city_name));
+    setEditStateId(matchState ? matchState.state_id : '');
+  }
+
+  async function handleEditDealer(e: React.FormEvent) {
+    e.preventDefault();
+    setEditSubmitting(true);
+    try {
+      const res = await fetch('/api/dealers', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dealerId: editModal!.dealer_id, ...editForm }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setEditModal(null);
+        fetchDealers();
+      } else {
+        alert(json.error || 'Failed to update dealer');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update dealer');
+    } finally {
+      setEditSubmitting(false);
+    }
+  }
+
   async function handleAddDealer(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
@@ -206,7 +242,7 @@ export default function DealersPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left" style={{ color: MUTED }}>
-                {['Dealer Code', 'Dealer Name', 'City', 'Phone', 'Status', 'Registered on'].map((h) => (
+                {['Dealer Code', 'Dealer Name', 'City', 'Phone', 'Status', 'Registered on', 'Actions'].map((h) => (
                   <th key={h} className="px-5 py-2 font-medium text-xs">{h}</th>
                 ))}
               </tr>
@@ -230,13 +266,19 @@ export default function DealersPage() {
                   <td className="px-5 py-3.5" style={{ color: MUTED }}>
                     {new Date(d.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </td>
+                  <td className="px-5 py-3.5">
+                    <button onClick={() => openEditModal(d)}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border" style={{ borderColor: VIOLET, color: VIOLET }}>
+                      Edit
+                    </button>
+                  </td>
                 </tr>
               ))}
               {loading && (
-                <tr><td colSpan={6} className="px-5 py-8 text-center text-sm" style={{ color: MUTED }}>Loading dealers...</td></tr>
+                <tr><td colSpan={7} className="px-5 py-8 text-center text-sm" style={{ color: MUTED }}>Loading dealers...</td></tr>
               )}
               {!loading && paged.length === 0 && (
-                <tr><td colSpan={6} className="px-5 py-8 text-center text-sm" style={{ color: MUTED }}>No dealers match your search.</td></tr>
+                <tr><td colSpan={7} className="px-5 py-8 text-center text-sm" style={{ color: MUTED }}>No dealers match your search.</td></tr>
               )}
             </tbody>
           </table>
@@ -258,9 +300,73 @@ export default function DealersPage() {
           </div>
         </div>
       </div>
-      {showAddModal && (
+      {editModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}>
           <div className="bg-white rounded-[20px] p-7 w-full max-w-md" style={{ boxShadow: CARD_SHADOW_HOVER }}>
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-bold text-lg" style={{ color: INK }}>Edit Dealer</p>
+              <button onClick={() => setEditModal(null)} style={{ color: MUTED }}>✕</button>
+            </div>
+            <form onSubmit={handleEditDealer} className="flex flex-col gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Dealer / Service Centre Name *</label>
+                <input required value={editForm.dealerName}
+                  onChange={(e) => setEditForm({ ...editForm, dealerName: e.target.value })}
+                  className="focus-glow rounded-xl px-4 py-2.5 text-sm outline-none w-full transition-all duration-150"
+                  style={{ border: `1px solid ${BORDER}` }} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>State</label>
+                <select value={editStateId}
+                  onChange={(e) => { setEditStateId(e.target.value ? Number(e.target.value) : ''); setEditForm({ ...editForm, cityName: '' }); }}
+                  className="focus-glow rounded-xl px-4 py-2.5 text-sm outline-none w-full transition-all duration-150"
+                  style={{ border: `1px solid ${BORDER}` }}>
+                  <option value="">Select a state</option>
+                  {states.map((s) => <option key={s.state_id} value={s.state_id}>{s.state_name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>City *</label>
+                <select required value={editForm.cityName} disabled={!editStateId}
+                  onChange={(e) => setEditForm({ ...editForm, cityName: e.target.value })}
+                  className="focus-glow rounded-xl px-4 py-2.5 text-sm outline-none w-full transition-all duration-150 disabled:opacity-50"
+                  style={{ border: `1px solid ${BORDER}` }}>
+                  <option value="">{editStateId ? 'Select a city' : 'Select a state first'}</option>
+                  {(citiesByState[editStateId as number] || []).map((c) => (
+                    <option key={c.city_id} value={c.city_name}>{c.city_name}</option>
+                  ))}
+                  {/* keep the current city visible even if its state wasn't matched above */}
+                  {editForm.cityName && !(citiesByState[editStateId as number] || []).some((c) => c.city_name === editForm.cityName) && (
+                    <option value={editForm.cityName}>{editForm.cityName} (current)</option>
+                  )}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Phone</label>
+                <input value={editForm.phone}
+                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  className="focus-glow rounded-xl px-4 py-2.5 text-sm outline-none w-full transition-all duration-150"
+                  style={{ border: `1px solid ${BORDER}` }} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Address</label>
+                <input value={editForm.address}
+                  onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                  className="focus-glow rounded-xl px-4 py-2.5 text-sm outline-none w-full transition-all duration-150"
+                  style={{ border: `1px solid ${BORDER}` }} />
+              </div>
+              <button type="submit" disabled={editSubmitting}
+                className="text-sm font-semibold text-white px-5 py-2.5 rounded-xl mt-2 disabled:opacity-50 transition-all duration-200 hover:-translate-y-0.5"
+                style={{ background: `linear-gradient(135deg, ${VIOLET_LIGHT}, ${VIOLET})`, boxShadow: `0 6px 16px -6px ${VIOLET}66` }}>
+                {editSubmitting ? 'Saving...' : 'Save changes'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}>
+          <div className="bg-white rounded-[20px] p-7 w-full max-w-md max-h-[90vh] overflow-y-auto" style={{ boxShadow: CARD_SHADOW_HOVER }}>
             <div className="flex items-center justify-between mb-4">
               <p className="font-bold text-lg" style={{ color: INK }}>Add Dealer</p>
               <button onClick={() => setShowAddModal(false)} style={{ color: MUTED }}>✕</button>
