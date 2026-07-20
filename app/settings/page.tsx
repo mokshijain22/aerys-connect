@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { ResponsiveLayout } from '@/app/components/ResponsiveLayout';
 import { NAV_ITEMS } from '@/app/lib/nav-items';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 
 const VIOLET = '#6C5CE7';
 const VIOLET_LIGHT = '#8B7CF8';
@@ -32,10 +33,20 @@ const TABS = ['General', 'Users & Roles', 'Notifications', 'Security', 'Integrat
 const ROLE_OPTIONS = ['super_admin', 'dealer', 'technician', 'customer'];
 
 export default function SettingsPage() {
+  const { data: session } = useSession();
+  const role = (session?.user as any)?.role || '';
+
   const [tab, setTab] = useState('General');
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
+
+  const [company, setCompany] = useState({
+    companyName: '', email: '', phone: '', address: '', city: '', state: '',
+  });
+  const [companyLoading, setCompanyLoading] = useState(false);
+  const [companySaving, setCompanySaving] = useState(false);
+  const [companyMessage, setCompanyMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -45,7 +56,51 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (tab === 'Users & Roles') fetchUsers();
+    if (tab === 'General') fetchCompanySettings();
   }, [tab, search]);
+
+  async function fetchCompanySettings() {
+    setCompanyLoading(true);
+    try {
+      const res = await fetch('/api/settings/company');
+      const json = await res.json();
+      if (json.success && json.data) {
+        setCompany({
+          companyName: json.data.company_name || '',
+          email: json.data.email || '',
+          phone: json.data.phone || '',
+          address: json.data.address || '',
+          city: json.data.city || '',
+          state: json.data.state || '',
+        });
+      }
+    } finally {
+      setCompanyLoading(false);
+    }
+  }
+
+  async function handleSaveCompany(e: React.FormEvent) {
+    e.preventDefault();
+    setCompanyMessage(null);
+    setCompanySaving(true);
+    try {
+      const res = await fetch('/api/settings/company', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(company),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setCompanyMessage({ type: 'success', text: 'Company profile saved' });
+      } else {
+        setCompanyMessage({ type: 'error', text: json.error || 'Failed to save' });
+      }
+    } catch {
+      setCompanyMessage({ type: 'error', text: 'Network error — try again' });
+    } finally {
+      setCompanySaving(false);
+    }
+  }
 
   async function fetchUsers() {
     setLoading(true);
@@ -157,25 +212,62 @@ export default function SettingsPage() {
 
         {tab === 'General' && (
           <div className="space-y-4">
-            <div className="rounded-[20px] p-7 bg-white border fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+            <form onSubmit={handleSaveCompany} className="rounded-[20px] p-7 bg-white border fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                 <p className="font-bold text-[15px]" style={{ color: INK }}>Company Profile</p>
-                <span className="text-xs px-3 py-1 rounded-full" style={{ backgroundColor: 'rgba(245,166,35,0.12)', color: '#B7791F' }}>
-                  Not connected — display only
-                </span>
+                {role !== 'super_admin' && (
+                  <span className="text-xs px-3 py-1 rounded-full" style={{ backgroundColor: 'rgba(107,114,128,0.1)', color: MUTED }}>
+                    View only — only super admin can edit
+                  </span>
+                )}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {['Company Name', 'Email', 'Phone', 'Address', 'City', 'State'].map((label) => (
-                  <div key={label}>
-                    <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>{label}</label>
-                    <input disabled placeholder={label} className="w-full rounded-xl px-4 py-2.5 text-sm outline-none" style={disabledInputStyle} />
+
+              {companyLoading ? (
+                <p className="text-sm" style={{ color: MUTED }}>Loading...</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {[
+                      { key: 'companyName', label: 'Company Name' },
+                      { key: 'email', label: 'Email' },
+                      { key: 'phone', label: 'Phone' },
+                      { key: 'address', label: 'Address' },
+                      { key: 'city', label: 'City' },
+                      { key: 'state', label: 'State' },
+                    ].map(({ key, label }) => (
+                      <div key={key}>
+                        <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>{label}</label>
+                        <input
+                          disabled={role !== 'super_admin'}
+                          placeholder={label}
+                          value={(company as any)[key]}
+                          onChange={(e) => setCompany((c) => ({ ...c, [key]: e.target.value }))}
+                          className="focus-glow w-full rounded-xl px-4 py-2.5 text-sm outline-none transition-all duration-150"
+                          style={role !== 'super_admin' ? disabledInputStyle : inputStyle}
+                        />
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              <p className="text-xs mt-3" style={{ color: MUTED }}>
-                These fields aren&apos;t backed by a database table yet — nothing typed here will save. Ask to add a company_settings table to make this real.
-              </p>
-            </div>
+
+                  {companyMessage && (
+                    <p className="text-xs font-medium mt-3" style={{ color: companyMessage.type === 'success' ? GREEN : RED }}>
+                      {companyMessage.text}
+                    </p>
+                  )}
+
+                  {role === 'super_admin' && (
+                    <button
+                      type="submit"
+                      disabled={companySaving}
+                      className="text-sm font-semibold text-white px-5 py-2.5 rounded-xl mt-4 disabled:opacity-50 transition-all duration-200 hover:-translate-y-0.5"
+                      style={{ background: `linear-gradient(135deg, ${VIOLET_LIGHT}, ${VIOLET})`, boxShadow: `0 6px 16px -6px ${VIOLET}66` }}
+                    >
+                      {companySaving ? 'Saving...' : 'Save changes'}
+                    </button>
+                  )}
+                </>
+              )}
+            </form>
           </div>
         )}
 

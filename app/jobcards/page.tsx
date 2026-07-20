@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import { ResponsiveLayout } from '@/app/components/ResponsiveLayout';
 import { NAV_ITEMS } from '@/app/lib/nav-items';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { VoiceInput } from '@/app/components/VoiceInput';
 import { LocationCapture, LocationValue } from '@/app/components/LocationCapture';
 
@@ -66,8 +67,9 @@ function formatElapsed(minutes: number) {
 export default function JobCardsPage() {
   const { data: session } = useSession();
   const role = (session?.user as any)?.role || '';
+  const searchParams = useSearchParams();
 
-  const [form, setForm] = useState({ chassisNumber: '', complaintText: '', serviceType: 'paid', partCategory: '', symptomType: '', priority: 'normal' });
+  const [form, setForm] = useState({ chassisNumber: searchParams.get('chassisNumber') || '', complaintText: '', serviceType: 'paid', partCategory: '', symptomType: '', priority: 'normal' });
   const [photos, setPhotos] = useState<File[]>([]);
   const [location, setLocation] = useState<LocationValue>({ latitude: null, longitude: null, addressText: '', source: null });
   const [message, setMessage] = useState('');

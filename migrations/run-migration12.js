@@ -6,8 +6,7 @@ async function main() {
   });
 
   const statements = [
-    `DROP TABLE IF EXISTS sos_alerts`,
-    `CREATE TABLE sos_alerts (
+    `CREATE TABLE IF NOT EXISTS sos_alerts (
       sos_id INT NOT NULL AUTO_INCREMENT,
       raised_by_user_id INT NOT NULL,
       raised_by_role VARCHAR(20) NOT NULL,
@@ -33,15 +32,19 @@ async function main() {
       await conn.query(sql);
       console.log('✓ done');
     } catch (err) {
-      console.error('  ✗ failed:', err.message);
+      if (err.errno === 1060 || err.errno === 1061 || err.errno === 1050) {
+        console.log('  (already exists, skipping)');
+      } else {
+        console.error('  ✗ failed:', err.message);
+      }
     }
   }
 
   await conn.end();
-  console.log('\nFix complete!');
+  console.log('\nMigration complete!');
 }
 
 main().catch((err) => {
-  console.error('Fix failed:', err.message);
+  console.error('Migration failed:', err.message);
   process.exit(1);
 });

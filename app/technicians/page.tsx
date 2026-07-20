@@ -39,14 +39,24 @@ export default function TechniciansPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [form, setForm] = useState({ full_name: '', phone: '', email: '', password: '' });
+  const [form, setForm] = useState({ full_name: '', phone: '', email: '', password: '', dealerId: '' });
+  const [dealerList, setDealerList] = useState<{ dealer_id: number; dealer_name: string; city_name: string }[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [page, setPage] = useState(1);
   const perPage = 6;
 
   useEffect(() => {
     fetchTechnicians();
-  }, []);
+    if (role === 'super_admin') fetchDealerList();
+  }, [role]);
+
+  async function fetchDealerList() {
+    try {
+      const res = await fetch('/api/dealers');
+      const json = await res.json();
+      if (json.success) setDealerList(json.dealerList || []);
+    } catch {}
+  }
 
   async function fetchTechnicians() {
     setLoading(true);
@@ -63,15 +73,18 @@ export default function TechniciansPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
+      const body: any = { full_name: form.full_name, phone: form.phone, email: form.email, password: form.password };
+      if (role === 'super_admin') body.dealer_id = form.dealerId ? Number(form.dealerId) : undefined;
+
       const res = await fetch('/api/technicians', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(body),
       });
       const json = await res.json();
       if (json.success) {
         setShowAddModal(false);
-        setForm({ full_name: '', phone: '', email: '', password: '' });
+        setForm({ full_name: '', phone: '', email: '', password: '', dealerId: '' });
         fetchTechnicians();
       } else {
         alert(json.error || 'Failed to add technician');
@@ -282,6 +295,20 @@ export default function TechniciansPage() {
                   <button onClick={() => setShowAddModal(false)} style={{ color: MUTED }}>✕</button>
                 </div>
                 <form onSubmit={handleAddTechnician} className="flex flex-col gap-3">
+                  {role === 'super_admin' && (
+                    <div>
+                      <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Dealer / Service Centre *</label>
+                      <select required value={form.dealerId}
+                        onChange={(e) => setForm({ ...form, dealerId: e.target.value })}
+                        className="focus-glow rounded-xl px-4 py-2.5 text-sm outline-none w-full transition-all duration-150"
+                        style={{ border: `1px solid ${BORDER}` }}>
+                        <option value="">Select dealer / service centre</option>
+                        {dealerList.map((d) => (
+                          <option key={d.dealer_id} value={d.dealer_id}>{d.dealer_name} — {d.city_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Full Name *</label>
                     <input required value={form.full_name}

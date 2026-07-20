@@ -52,7 +52,7 @@ export async function GET() {
       pool.query(`SELECT COUNT(*) AS total FROM vehicles WHERE deleted_at IS NULL${vehicleFilter}`, vParams),
       pool.query(`SELECT COUNT(*) AS total FROM job_cards WHERE status NOT IN ('delivered','cancelled') AND deleted_at IS NULL${jobFilter}`, jParams),
       pool.query(`SELECT COUNT(*) AS total FROM job_cards WHERE status IN ('registered','acknowledged') AND deleted_at IS NULL${jobFilter}`, jParams),
-      pool.query(`SELECT COUNT(*) AS total FROM job_cards WHERE technician_assigned_at IS NULL AND status IN ('registered','acknowledged') AND registered_at < (NOW() - INTERVAL 48 HOUR) AND deleted_at IS NULL${jobFilter}`, jParams),
+      pool.query(`SELECT COUNT(*) AS total FROM job_cards WHERE escalated = 1 AND status NOT IN ('delivered','completed') AND deleted_at IS NULL${jobFilter}`, jParams),
       pool.query(`SELECT COUNT(*) AS total FROM job_cards WHERE status = 'completed' AND DATE(service_completed_at) = CURDATE() AND deleted_at IS NULL${jobFilter}`, jParams),
       pool.query(`SELECT COUNT(*) AS total FROM job_cards WHERE DATE(registered_at) = CURDATE() AND deleted_at IS NULL${jobFilter}`, jParams),
       pool.query(`SELECT COUNT(*) AS total FROM job_cards WHERE status = 'delivered' AND DATE(delivered_at) = CURDATE() AND deleted_at IS NULL${jobFilter}`, jParams),

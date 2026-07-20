@@ -37,6 +37,9 @@ export default function DealersPage() {
   const [dealers, setDealers] = useState<Dealer[]>([]);
   const [stats, setStats] = useState({ totalDealers: 0, activeDealers: 0, activePercent: 0 });
   const [cities, setCities] = useState<string[]>([]);
+  const [states, setStates] = useState<{ state_id: number; state_name: string }[]>([]);
+  const [citiesByState, setCitiesByState] = useState<Record<number, { city_id: number; city_name: string }[]>>({});
+  const [selectedStateId, setSelectedStateId] = useState<number | ''>('');
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -66,6 +69,8 @@ export default function DealersPage() {
         setDealers(json.data);
         setStats(json.stats);
         setCities(json.cities);
+        setStates(json.states || []);
+        setCitiesByState(json.citiesByState || {});
       }
     } finally {
       setLoading(false);
@@ -84,6 +89,7 @@ export default function DealersPage() {
       if (json.success) {
         setShowAddModal(false);
         setForm({ dealerName: '', phone: '', address: '', cityName: '' });
+        setSelectedStateId('');
         fetchDealers();
       } else {
         alert(json.error || 'Failed to add dealer');
@@ -261,20 +267,32 @@ export default function DealersPage() {
             </div>
             <form onSubmit={handleAddDealer} className="flex flex-col gap-3">
               <div>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Dealer Name *</label>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Dealer / Service Centre Name *</label>
                 <input required value={form.dealerName}
                   onChange={(e) => setForm({ ...form, dealerName: e.target.value })}
                   className="focus-glow rounded-xl px-4 py-2.5 text-sm outline-none w-full transition-all duration-150"
                   style={{ border: `1px solid ${BORDER}` }} />
               </div>
               <div>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>City *</label>
-                <select required value={form.cityName}
-                  onChange={(e) => setForm({ ...form, cityName: e.target.value })}
+                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>State *</label>
+                <select required value={selectedStateId}
+                  onChange={(e) => { setSelectedStateId(e.target.value ? Number(e.target.value) : ''); setForm({ ...form, cityName: '' }); }}
                   className="focus-glow rounded-xl px-4 py-2.5 text-sm outline-none w-full transition-all duration-150"
                   style={{ border: `1px solid ${BORDER}` }}>
-                  <option value="">Select a city</option>
-                  {cities.map((c) => <option key={c} value={c}>{c}</option>)}
+                  <option value="">Select a state</option>
+                  {states.map((s) => <option key={s.state_id} value={s.state_id}>{s.state_name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>City / Service Centre Location *</label>
+                <select required value={form.cityName} disabled={!selectedStateId}
+                  onChange={(e) => setForm({ ...form, cityName: e.target.value })}
+                  className="focus-glow rounded-xl px-4 py-2.5 text-sm outline-none w-full transition-all duration-150 disabled:opacity-50"
+                  style={{ border: `1px solid ${BORDER}` }}>
+                  <option value="">{selectedStateId ? 'Select a city' : 'Select a state first'}</option>
+                  {(citiesByState[selectedStateId as number] || []).map((c) => (
+                    <option key={c.city_id} value={c.city_name}>{c.city_name}</option>
+                  ))}
                 </select>
               </div>
               <div>

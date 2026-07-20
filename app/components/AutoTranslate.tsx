@@ -2,6 +2,7 @@
 import { useEffect, useRef } from 'react';
 import { useLanguage } from '@/app/lib/LanguageContext';
 import { autoDict } from '@/app/lib/autoTranslateDict';
+import type { Lang } from '@/app/lib/translations';
 
 // Caches the ORIGINAL English text for every text node & placeholder we touch,
 // so we can restore it exactly when switching back to English.
@@ -18,11 +19,11 @@ function shouldSkip(node: Node): boolean {
   return false;
 }
 
-function translateWord(original: string, lang: 'en' | 'hi'): string {
+function translateWord(original: string, lang: Lang): string {
   const trimmed = original.trim();
   if (!trimmed) return original;
   if (lang === 'en') return original;
-  const hit = autoDict[trimmed];
+  const hit = autoDict[trimmed]?.[lang];
   if (!hit) return original;
   // preserve surrounding whitespace from the original node
   const leading = original.slice(0, original.indexOf(trimmed));
@@ -30,7 +31,7 @@ function translateWord(original: string, lang: 'en' | 'hi'): string {
   return leading + hit + trailing;
 }
 
-function walkAndTranslate(root: Node, lang: 'en' | 'hi') {
+function walkAndTranslate(root: Node, lang: Lang) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode: (n) => (shouldSkip(n) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
   });
@@ -43,11 +44,21 @@ function walkAndTranslate(root: Node, lang: 'en' | 'hi') {
   }
 
   for (const node of textNodes) {
+    const liveText = node.textContent || '';
+
+    // In English mode, keep cache synced with live React output so dynamic
+    // values (counts, timers, "Showing X of Y") don't get frozen to first render.
+    if (lang === 'en') {
+      originalTextCache.set(node, liveText);
+      continue;
+    }
+
     let original = originalTextCache.get(node);
     if (original === undefined) {
-      original = node.textContent || '';
+      original = liveText;
       originalTextCache.set(node, original);
     }
+
     const desired = translateWord(original, lang);
     if (node.textContent !== desired) {
       node.textContent = desired;
@@ -60,11 +71,19 @@ function walkAndTranslate(root: Node, lang: 'en' | 'hi') {
   );
   placeholderEls.forEach((el) => {
     const element = el as HTMLInputElement | HTMLTextAreaElement;
+    const livePlaceholder = element.placeholder || '';
+
+    if (lang === 'en') {
+      originalPlaceholderCache.set(element, livePlaceholder);
+      return;
+    }
+
     let original = originalPlaceholderCache.get(element);
     if (original === undefined) {
-      original = element.placeholder || '';
+      original = livePlaceholder;
       originalPlaceholderCache.set(element, original);
     }
+
     const desired = translateWord(original, lang);
     if (element.placeholder !== desired) {
       element.placeholder = desired;

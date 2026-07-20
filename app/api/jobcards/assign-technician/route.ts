@@ -52,6 +52,10 @@ export async function POST(request: Request) {
       [jobCardId, technicianId]
     );
 
+    const { notifyCustomerForJobCard, notifyTechnicianForJobCard } = await import('../../../lib/notifications');
+    notifyCustomerForJobCard(jobCardId, 'Technician assigned', 'A technician has been assigned to your service request.').catch(() => {});
+    notifyTechnicianForJobCard(jobCardId, 'New job assigned', 'A new job card has been assigned to you. Please accept or reject.').catch(() => {});
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

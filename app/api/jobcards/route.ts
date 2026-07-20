@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { generateInvoiceForJobCard } from '../../lib/invoice';
 import { autoAssignOverdueJobCards } from '../../lib/autoAssign';
+import { notifyCustomerForJobCard, notifyDealerForJobCard } from '../../lib/notifications';
 
 export const dynamic = 'force-dynamic';
 
@@ -63,6 +64,17 @@ export async function POST(request: Request) {
         (hasCoords || destAddressText) ? new Date() : null,
       ]
     );
+
+    notifyCustomerForJobCard(
+      result.insertId,
+      'Complaint registered',
+      `Your complaint has been registered. Our team will get back to you shortly.`
+    ).catch(() => {});
+    notifyDealerForJobCard(
+      result.insertId,
+      'New job card',
+      `A new job card has been registered and needs your acknowledgement.`
+    ).catch(() => {});
 
     return NextResponse.json({ success: true, jobCardId: result.insertId });
   } catch (error: any) {
@@ -224,6 +236,18 @@ export async function PATCH(request: Request) {
         console.error('Invoice generation failed:', invErr.message);
         // don't fail the status update if invoice generation has an issue
       }
+    }
+
+    const STATUS_MESSAGES: Record<string, { title: string; message: string }> = {
+      acknowledged: { title: 'Complaint accepted', message: 'Your complaint has been accepted by the service centre. A technician will be assigned soon.' },
+      rejected_by_dealer: { title: 'Complaint update', message: `Your complaint could not be processed: ${rejectionReason || 'no reason given'}. Please contact the dealer.` },
+      in_progress: { title: 'Service started', message: 'The technician has started working on your vehicle.' },
+      completed: { title: 'Service completed', message: 'Your service is complete. Please verify to confirm delivery.' },
+      delivered: { title: 'Vehicle delivered', message: 'Your vehicle has been delivered. Thank you for choosing AERYS!' },
+    };
+    const notif = STATUS_MESSAGES[newStatus];
+    if (notif) {
+      notifyCustomerForJobCard(jobCardId, notif.title, notif.message).catch(() => {});
     }
 
     return NextResponse.json({ success: true });

@@ -87,11 +87,29 @@ export function ResponsiveLayout({ navItems, children, sidebarFooter }: Responsi
     setIsSearchFocused(false);
   }
 
-  const NOTIFICATIONS = [
-    { title: 'Low stock alert', body: 'Battery pack running low at Bhopal Central', time: '10m ago' },
-    { title: 'New warranty claim', body: 'Claim #WC-1042 submitted for review', time: '1h ago' },
-    { title: 'Job card completed', body: 'JC-2291 marked as resolved', time: '3h ago' },
-  ];
+  const [notifications, setNotifications] = useState<{ notification_id: number; title: string; message: string; created_at: string }[]>([]);
+
+  useEffect(() => {
+    const fetchNotifs = async () => {
+      try {
+        const res = await fetch('/api/notifications');
+        const json = await res.json();
+        if (json.success) setNotifications(json.data);
+      } catch {}
+    };
+    fetchNotifs();
+    const interval = setInterval(fetchNotifs, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  function timeAgo(dateStr: string) {
+    const diffMs = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  }
   const MESSAGES = [
     { from: 'Ravi (Dealer - Indore)', body: 'Need approval on part order #4521', time: '25m ago' },
     { from: 'System', body: 'Weekly performance report is ready', time: '2h ago' },
@@ -187,22 +205,19 @@ export function ResponsiveLayout({ navItems, children, sidebarFooter }: Responsi
         </nav>
 
         <div className="px-2 mb-2">
-          <div className="flex rounded-xl overflow-hidden border" style={{ borderColor: BORDER }}>
-            <button
-              onClick={() => setLang('en')}
-              className="flex-1 text-xs font-semibold py-1.5 transition-colors"
-              style={lang === 'en' ? { backgroundColor: VIOLET, color: '#fff' } : { color: MUTED }}
-            >
-              EN
-            </button>
-            <button
-              onClick={() => setLang('hi')}
-              className="flex-1 text-xs font-semibold py-1.5 transition-colors"
-              style={lang === 'hi' ? { backgroundColor: VIOLET, color: '#fff' } : { color: MUTED }}
-            >
-              हिं
-            </button>
-          </div>
+          <select
+            value={lang}
+            onChange={(e) => setLang(e.target.value as any)}
+            className="w-full text-xs font-semibold rounded-xl px-2 py-1.5 outline-none border"
+            style={{ borderColor: BORDER, color: MUTED, backgroundColor: '#fff' }}
+          >
+            <option value="en">English</option>
+            <option value="hi">हिंदी</option>
+            <option value="mr">मराठी</option>
+            <option value="kn">ಕನ್ನಡ</option>
+            <option value="te">తెలుగు</option>
+            <option value="ta">தமிழ்</option>
+          </select>
         </div>
 
         {role === 'technician' && (
@@ -317,7 +332,7 @@ export function ResponsiveLayout({ navItems, children, sidebarFooter }: Responsi
                   className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full text-[9px] text-white flex items-center justify-center font-semibold"
                   style={{ backgroundColor: '#E24B4A' }}
                 >
-                  {NOTIFICATIONS.length}
+                  {notifications.length}
                 </span>
               </button>
               {isNotifOpen && (
@@ -328,13 +343,16 @@ export function ResponsiveLayout({ navItems, children, sidebarFooter }: Responsi
                   <div className="px-4 py-3 border-b" style={{ borderColor: BORDER }}>
                     <p className="text-sm font-semibold" style={{ color: INK }}>Notifications</p>
                   </div>
-                  {NOTIFICATIONS.map((n, i) => (
-                    <div key={i} className="px-4 py-3 border-b last:border-b-0 transition-colors hover:bg-[rgba(108,92,231,0.04)]" style={{ borderColor: BORDER }}>
+                  {notifications.length === 0 && (
+                    <p className="px-4 py-6 text-center text-sm" style={{ color: MUTED }}>No notifications yet.</p>
+                  )}
+                  {notifications.map((n) => (
+                    <div key={n.notification_id} className="px-4 py-3 border-b last:border-b-0 transition-colors hover:bg-[rgba(108,92,231,0.04)]" style={{ borderColor: BORDER }}>
                       <div className="flex items-center justify-between mb-0.5">
                         <p className="text-sm font-semibold" style={{ color: INK }}>{n.title}</p>
-                        <span className="text-[10px]" style={{ color: MUTED }}>{n.time}</span>
+                        <span className="text-[10px]" style={{ color: MUTED }}>{timeAgo(n.created_at)}</span>
                       </div>
-                      <p className="text-xs" style={{ color: MUTED }}>{n.body}</p>
+                      <p className="text-xs" style={{ color: MUTED }}>{n.message}</p>
                     </div>
                   ))}
                 </div>
@@ -406,7 +424,7 @@ export function ResponsiveLayout({ navItems, children, sidebarFooter }: Responsi
                   className="absolute right-0 top-full mt-2 w-52 rounded-2xl border bg-white overflow-hidden z-20"
                   style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}
                 >
-                  <Link href="/settings" onClick={() => setIsUserOpen(false)} className="block px-4 py-2.5 text-sm transition-colors hover:bg-[rgba(108,92,231,0.06)]" style={{ color: INK }}>
+                  <Link href="/account-settings" onClick={() => setIsUserOpen(false)} className="block px-4 py-2.5 text-sm transition-colors hover:bg-[rgba(108,92,231,0.06)]" style={{ color: INK }}>
                     Account settings
                   </Link>
                   <button

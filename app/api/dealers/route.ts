@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { pool } from '@/app/lib/db';
+import { auth } from '@/auth';
 
 export async function GET(request: Request) {
   try {
@@ -42,10 +43,37 @@ export async function GET(request: Request) {
     const [[activeRow]]: any = await pool.query(
       `SELECT COUNT(*) AS total FROM dealers WHERE deleted_at IS NULL AND is_approved = 1`
     );
+    // Cities that already have at least one dealer — used for the filter dropdown
     const [cityRows]: any = await pool.query(
       `SELECT DISTINCT c.city_name FROM dealers d
        JOIN cities c ON d.city_id = c.city_id
        WHERE d.deleted_at IS NULL ORDER BY c.city_name ASC`
+    );
+
+    // Full State -> City hierarchy pan-India, for the "Add Dealer" cascading dropdowns.
+    const [locRows]: any = await pool.query(
+      `SELECT s.state_id, s.state_name, c.city_id, c.city_name
+       FROM cities c
+       JOIN districts dist ON c.district_id = dist.district_id
+       JOIN states s ON dist.state_id = s.state_id
+       ORDER BY s.state_name ASC, c.city_name ASC`
+    );
+
+    const statesMap = new Map<number, string>();
+    const citiesByState: Record<number, { city_id: number; city_name: string }[]> = {};
+    for (const r of locRows) {
+      statesMap.set(r.state_id, r.state_name);
+      if (!citiesByState[r.state_id]) citiesByState[r.state_id] = [];
+      citiesByState[r.state_id].push({ city_id: r.city_id, city_name: r.city_name });
+    }
+    const states = Array.from(statesMap.entries()).map(([state_id, state_name]) => ({ state_id, state_name }));
+
+    // All dealers (id/name/city) — used by the Technicians page so super_admin
+    // can pick which dealer/service centre a new technician belongs to.
+    const [dealerListRows]: any = await pool.query(
+      `SELECT d.dealer_id, d.dealer_name, c.city_name
+       FROM dealers d JOIN cities c ON d.city_id = c.city_id
+       WHERE d.deleted_at IS NULL ORDER BY d.dealer_name ASC`
     );
 
     return NextResponse.json({
@@ -57,6 +85,9 @@ export async function GET(request: Request) {
         activePercent: totalRow.total ? Math.round((activeRow.total / totalRow.total) * 100 * 10) / 10 : 0,
       },
       cities: cityRows.map((r: any) => r.city_name),
+      states,
+      citiesByState,
+      dealerList: dealerListRows,
     });
   } catch (error: any) {
     console.error('Error fetching dealers:', error);
@@ -78,6 +109,16 @@ export async function PATCH(request: Request) {
 }
 export async function POST(request: Request) {
   try {
+    const session = await auth();
+    const role = (session?.user as any)?.role || '';
+
+    if (!session?.user) {
+      return NextResponse.json({ success: false, error: 'Not authenticated' }, { status: 401 });
+    }
+    if (role !== 'super_admin') {
+      return NextResponse.json({ success: false, error: 'Only super admin can add dealers' }, { status: 403 });
+    }
+
     const { dealerName, phone, address, cityName } = await request.json();
 
     if (!dealerName || !cityName) {

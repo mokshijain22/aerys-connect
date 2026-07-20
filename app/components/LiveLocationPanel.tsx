@@ -42,8 +42,13 @@ export function LiveLocationPanel({ jobCardId, active, role }: { jobCardId: numb
   const [loading, setLoading] = useState(true);
 
   // One-time: if this is the customer and destination isn't set yet, capture it.
+  // Waits for the first poll to know whether a destination already exists —
+  // otherwise this would silently overwrite a correct address every time the
+  // customer opens the tracking view from a different location.
   useEffect(() => {
     if (!active || role !== 'customer') return;
+    if (!data) return; // wait for first poll to know hasDestination
+    if (data.hasDestination) return; // already set — don't overwrite
     if (!('geolocation' in navigator)) return;
 
     navigator.geolocation.getCurrentPosition(
@@ -61,7 +66,7 @@ export function LiveLocationPanel({ jobCardId, active, role }: { jobCardId: numb
       () => {}, // silently ignore denial — ETA just won't show
       { enableHighAccuracy: false, maximumAge: 600000, timeout: 10000 }
     );
-  }, [active, role, jobCardId]);
+  }, [active, role, jobCardId, data]);
 
   useEffect(() => {
     if (!active) return;

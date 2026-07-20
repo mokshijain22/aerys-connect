@@ -5,46 +5,24 @@ async function main() {
     host: 'localhost', port: 3306, user: 'root', password: 'root', database: 'aerys_service_connect',
   });
 
-  const statements = [
-    `CREATE TABLE IF NOT EXISTS sos_alerts (
-      sos_id INT NOT NULL AUTO_INCREMENT,
-      raised_by_user_id INT NOT NULL,
-      raised_by_role VARCHAR(20) NOT NULL,
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      notification_id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NULL,
+      phone VARCHAR(20) NULL,
+      channel ENUM('whatsapp','sms','in_app') DEFAULT 'in_app',
+      title VARCHAR(255),
+      message VARCHAR(500),
       job_card_id INT NULL,
-      dealer_id INT NULL,
-      reason VARCHAR(30) NOT NULL,
-      note VARCHAR(300) NULL,
-      latitude DECIMAL(10,7) NULL,
-      longitude DECIMAL(10,7) NULL,
-      status ENUM('open','resolved') NOT NULL DEFAULT 'open',
-      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      resolved_at TIMESTAMP NULL,
-      resolved_by INT NULL,
-      PRIMARY KEY (sos_id)
-    )`,
-    `CREATE INDEX idx_sos_status ON sos_alerts (status)`,
-    `CREATE INDEX idx_sos_dealer ON sos_alerts (dealer_id)`,
-  ];
-
-  for (const sql of statements) {
-    try {
-      console.log('Running:', sql.slice(0, 70) + '...');
-      await conn.query(sql);
-      console.log('✓ done');
-    } catch (err) {
-      if (err.errno === 1060 || err.errno === 1061 || err.errno === 1050) {
-        console.log('  (already exists, skipping)');
-      } else {
-        console.error('  ✗ failed:', err.message);
-      }
-    }
-  }
+      is_read TINYINT(1) DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_user (user_id),
+      INDEX idx_created (created_at)
+    )
+  `);
+  console.log('✓ notifications table ready');
 
   await conn.end();
-  console.log('\nMigration complete!');
 }
 
-main().catch((err) => {
-  console.error('Migration failed:', err.message);
-  process.exit(1);
-});
+main().catch((err) => { console.error('Migration failed:', err.message); process.exit(1); });

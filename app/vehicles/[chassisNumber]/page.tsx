@@ -1,18 +1,23 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 
 const VIOLET = '#6C5CE7';
-const INK = '#1A1A2E';
-const MUTED = '#6B7280';
+const VIOLET_LIGHT = '#8B7CF8';
+const VIOLET_DIM = 'rgba(108,92,231,0.10)';
 const BORDER = 'rgba(30,20,60,0.07)';
+const MUTED = '#6B7280';
+const INK = '#1A1A2E';
+const RED = '#E24B4A';
+const GREEN = '#34C759';
 
 const badgeColor = (status: string) =>
   status === 'Active' ? '#34C759' : status === 'Expired' ? '#E24B4A' : MUTED;
 
 export default function PublicVehiclePage() {
   const { chassisNumber } = useParams<{ chassisNumber: string }>();
+  const router = useRouter();
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -35,9 +40,27 @@ export default function PublicVehiclePage() {
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-sm" style={{ color: '#E24B4A' }}>{error}</p>
+        <p className="text-sm" style={{ color: RED }}>{error}</p>
       </div>
     );
+  }
+
+  function bookService() {
+    router.push(`/jobcards?chassisNumber=${encodeURIComponent(chassisNumber)}`);
+  }
+
+  function callDealer() {
+    if (data.dealerPhone) window.location.href = `tel:${data.dealerPhone}`;
+  }
+
+  function getDirections() {
+    if (data.dealerAddress) {
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(data.dealerAddress)}`, '_blank');
+    }
+  }
+
+  function printQr() {
+    window.open(`/vehicles/${chassisNumber}/qr-print`, '_blank');
   }
 
   return (
@@ -66,13 +89,56 @@ export default function PublicVehiclePage() {
         </div>
 
         <p className="text-xs font-medium mb-2" style={{ color: INK }}>Warranty status</p>
-        <div className="space-y-2">
+        <div className="space-y-2 mb-6">
           {Object.entries(data.warranty).map(([part, status]: any) => (
             <div key={part} className="flex items-center justify-between rounded-xl px-4 py-2.5" style={{ backgroundColor: '#F7F7FB' }}>
               <span className="text-sm capitalize" style={{ color: INK }}>{part}</span>
               <span className="text-xs font-semibold" style={{ color: badgeColor(status) }}>{status}</span>
             </div>
           ))}
+        </div>
+
+        {/* Service history */}
+        <p className="text-xs font-medium mb-2" style={{ color: INK }}>Recent service history</p>
+        {data.serviceHistory.length === 0 ? (
+          <p className="text-xs mb-6" style={{ color: MUTED }}>No service records yet.</p>
+        ) : (
+          <div className="space-y-2 mb-6">
+            {data.serviceHistory.map((h: any) => (
+              <div key={h.jobCardId} className="flex items-center justify-between rounded-xl px-4 py-2.5" style={{ backgroundColor: '#F7F7FB' }}>
+                <div>
+                  <p className="text-xs font-semibold" style={{ color: INK }}>#{h.jobCardId} — {h.status}</p>
+                  <p className="text-[11px]" style={{ color: MUTED }}>
+                    {new Date(h.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div className="grid grid-cols-2 gap-2.5">
+          <button onClick={bookService}
+            className="text-xs font-semibold text-white px-4 py-2.5 rounded-xl"
+            style={{ background: `linear-gradient(135deg, ${VIOLET_LIGHT}, ${VIOLET})` }}>
+            📋 Book a service
+          </button>
+          <button onClick={callDealer} disabled={!data.dealerPhone}
+            className="text-xs font-semibold px-4 py-2.5 rounded-xl border disabled:opacity-40"
+            style={{ borderColor: RED, color: RED }}>
+            🆘 Emergency call
+          </button>
+          <button onClick={getDirections} disabled={!data.dealerAddress}
+            className="text-xs font-semibold px-4 py-2.5 rounded-xl border disabled:opacity-40"
+            style={{ borderColor: BORDER, color: INK }}>
+            📍 Directions
+          </button>
+          <button onClick={printQr}
+            className="text-xs font-semibold px-4 py-2.5 rounded-xl border"
+            style={{ borderColor: BORDER, color: INK }}>
+            🖨️ Print QR
+          </button>
         </div>
       </div>
     </div>
