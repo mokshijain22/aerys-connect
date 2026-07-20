@@ -10,7 +10,7 @@ export async function GET(
     const [rows]: any = await pool.query(
       `SELECT
         wc.claim_id, wc.claim_number, wc.component, wc.warranty_status_at_claim,
-        wc.status, wc.submitted_at, wc.resolved_at, wc.remarks,
+        wc.status, wc.submitted_at, wc.resolved_at, wc.remarks, wc.approved_cost, wc.is_flagged,
         v.chassis_number, c.full_name, c.phone,
         d.dealer_name
       FROM warranty_claims wc

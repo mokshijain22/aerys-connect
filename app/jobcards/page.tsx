@@ -812,8 +812,8 @@ export default function JobCardsPage() {
               </div>
 
               <div className="md:col-span-3">
-                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Photos (optional, max 5)</label>
-                <input type="file" accept="image/*" multiple onChange={handlePhotoSelect} disabled={photos.length >= 5}
+                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Photos / Videos (optional, max 5)</label>
+                <input type="file" accept="image/*,video/*" multiple onChange={handlePhotoSelect} disabled={photos.length >= 5}
                   className="w-full rounded-2xl px-4 py-3 text-sm outline-none" style={inputStyle} />
                 {photos.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">

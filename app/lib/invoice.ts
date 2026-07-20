@@ -39,11 +39,27 @@ export async function generateInvoiceForJobCard(jobCardId: number) {
   const year = new Date().getFullYear();
   const invoiceNumber = `INV-${year}-${String(jobCardId).padStart(6, '0')}`;
 
-  await pool.query(
-    `INSERT INTO invoices (job_card_id, invoice_number, parts_total, labour_cost, subtotal, gst_rate, gst_amount, total_amount)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [jobCardId, invoiceNumber, partsTotal, labourCost, subtotal, gstRate, gstAmount, totalAmount]
-  );
+  try {
+    await pool.query(
+      `INSERT INTO invoices (job_card_id, invoice_number, parts_total, labour_cost, subtotal, gst_rate, gst_amount, total_amount)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [jobCardId, invoiceNumber, partsTotal, labourCost, subtotal, gstRate, gstAmount, totalAmount]
+    );
+  } catch (err: any) {
+    // Duplicate invoice attempt: two requests raced to generate an invoice
+    // for the same job card. The UNIQUE KEY on job_card_id caught it —
+    // fetch and return the invoice that won the race instead of erroring out.
+    if (err && err.code === 'ER_DUP_ENTRY') {
+      const [raceWinner]: any = await pool.query(
+        'SELECT invoice_number FROM invoices WHERE job_card_id = ?',
+        [jobCardId]
+      );
+      if (raceWinner.length > 0) {
+        return raceWinner[0].invoice_number;
+      }
+    }
+    throw err;
+  }
 
   await pool.query(
     `UPDATE job_cards SET invoice_number = ?, invoice_generated_at = NOW() WHERE job_card_id = ?`,

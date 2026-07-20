@@ -55,6 +55,22 @@ export async function POST(
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
+    const isImage = file.type.startsWith("image/");
+    const isVideo = file.type.startsWith("video/");
+    if (!isImage && !isVideo) {
+      return NextResponse.json({ error: "Only image or video files are allowed" }, { status: 400 });
+    }
+
+    const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
+    const MAX_VIDEO_BYTES = 50 * 1024 * 1024; // 50 MB
+    const maxBytes = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+    if (file.size > maxBytes) {
+      return NextResponse.json(
+        { error: `File too large. Max ${isVideo ? '50MB for videos' : '10MB for images'}.` },
+        { status: 400 }
+      );
+    }
+
     const uploadDir = path.join(
       process.cwd(),
       "public",

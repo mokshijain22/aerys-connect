@@ -30,6 +30,7 @@ type Claim = {
   date: string;
   submittedRaw: string;
   updatedRaw: string | null;
+  flagged: boolean;
 };
 
 const statusLabelMap: Record<string, string> = {
@@ -50,6 +51,7 @@ function mapApiClaim(row: any): Claim {
     date: new Date(row.submitted_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
     submittedRaw: row.submitted_at,
     updatedRaw: row.resolved_at,
+    flagged: !!row.is_flagged,
   };
 }
 
@@ -252,6 +254,11 @@ export default function WarrantyClaimsPage() {
                   {claim.status}
                 </span>
               </div>
+              {claim.flagged && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full mb-2" style={{ backgroundColor: 'rgba(226,75,74,0.10)', color: RED }}>
+                  ⚠ Flagged for review
+                </span>
+              )}
               <p className="text-xs mb-1" style={{ color: MUTED }}>Chassis: <span style={{ color: INK }}>{claim.chassis}</span></p>
               <p className="text-xs mb-1" style={{ color: MUTED }}>Component: <span style={{ color: INK }}>{claim.component}</span></p>
               <p className="text-xs mb-4" style={{ color: MUTED }}>Dealer: <span style={{ color: INK }}>{claim.dealer}</span></p>
@@ -290,6 +297,11 @@ export default function WarrantyClaimsPage() {
                 <tr key={c.id} className="border-t transition-colors duration-150 hover:bg-[rgba(108,92,231,0.04)]" style={{ borderColor: BORDER }}>
                   <td className="px-5 py-3.5">
                     <a href={`/warranty-claims/${c.id}`} className="font-semibold" style={{ color: VIOLET }}>{c.id}</a>
+                    {c.flagged && (
+                      <span className="ml-2 inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full align-middle" style={{ backgroundColor: 'rgba(226,75,74,0.10)', color: RED }}>
+                        ⚠ Flagged
+                      </span>
+                    )}
                   </td>
                   <td className="px-5 py-3.5" style={{ color: MUTED }}>{c.chassis}</td>
                   <td className="px-5 py-3.5" style={{ color: MUTED }}>{c.component}</td>

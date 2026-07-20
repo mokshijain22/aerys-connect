@@ -180,12 +180,18 @@ export default function JobCardDetailPage() {
 
         {complaintPhotos.length > 0 && (
           <div className="mb-6">
-            <dt className="text-sm mb-2" style={{ color: MUTED }}>Complaint photos</dt>
+            <dt className="text-sm mb-2" style={{ color: MUTED }}>Complaint photos / videos</dt>
             <div className="flex flex-wrap gap-3">
               {complaintPhotos.map((p: any) => (
-                <a key={p.attachment_id} href={p.file_path} target="_blank" rel="noopener noreferrer">
-                  <img src={p.file_path} alt="complaint" className="w-24 h-24 object-cover rounded-xl border" style={{ borderColor: BORDER }} />
-                </a>
+                p.file_type && p.file_type.startsWith('video/') ? (
+                  <a key={p.attachment_id} href={p.file_path} target="_blank" rel="noopener noreferrer">
+                    <video src={p.file_path} className="w-24 h-24 object-cover rounded-xl border" style={{ borderColor: BORDER }} muted />
+                  </a>
+                ) : (
+                  <a key={p.attachment_id} href={p.file_path} target="_blank" rel="noopener noreferrer">
+                    <img src={p.file_path} alt="complaint" className="w-24 h-24 object-cover rounded-xl border" style={{ borderColor: BORDER }} />
+                  </a>
+                )
               ))}
             </div>
           </div>

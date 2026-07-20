@@ -12,6 +12,8 @@ type ClaimDetail = {
   submitted_at: string;
   resolved_at: string | null;
   remarks: string | null;
+  approved_cost: string | number | null;
+  is_flagged: number | boolean;
   chassis_number: string;
   full_name: string;
   phone: string;
@@ -36,6 +38,7 @@ export default function ClaimDetailPage() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState('');
+  const [costInput, setCostInput] = useState('');
 
   function loadClaim() {
     setLoading(true);
@@ -97,7 +100,7 @@ export default function ClaimDetailPage() {
     }
   }
 
-  async function updateStatus(newStatus: string) {
+  async function updateStatus(newStatus: string, approvedCost?: string) {
     if (!claim) return;
     setUpdating(true);
     setError('');
@@ -106,7 +109,7 @@ export default function ClaimDetailPage() {
       const res = await fetch('/api/warranty-claims', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ claimId: claim.claim_id, newStatus }),
+        body: JSON.stringify({ claimId: claim.claim_id, newStatus, approvedCost }),
       });
       const json = await res.json();
 
@@ -149,9 +152,16 @@ export default function ClaimDetailPage() {
       <div className="bg-white rounded-2xl border border-slate-200 p-8 max-w-2xl">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-semibold text-slate-800">{claim.claim_number}</h1>
-          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
-            {statusLabel}
-          </span>
+          <div className="flex items-center gap-2">
+            {!!claim.is_flagged && (
+              <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-red-50 text-red-600">
+                ⚠ Flagged for review
+              </span>
+            )}
+            <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
+              {statusLabel}
+            </span>
+          </div>
         </div>
 
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-6">
@@ -185,6 +195,16 @@ export default function ClaimDetailPage() {
               {claim.resolved_at ? new Date(claim.resolved_at).toLocaleString('en-GB') : '—'}
             </dd>
           </div>
+          {claim.status === 'company_approved' && (
+            <div>
+              <dt className="text-slate-400">Approved cost</dt>
+              <dd className="text-slate-700">
+                {claim.approved_cost !== null && claim.approved_cost !== undefined
+                  ? `₹${Number(claim.approved_cost).toLocaleString('en-IN')}`
+                  : '—'}
+              </dd>
+            </div>
+          )}
         </dl>
 
         <div className="mb-6">
@@ -248,13 +268,24 @@ export default function ClaimDetailPage() {
 
           {claim.status === 'dealer_approved' && (
             <>
-              <button
-                onClick={() => updateStatus('company_approved')}
-                disabled={updating}
-                className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg"
-              >
-                Approve
-              </button>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Approved cost (₹)"
+                  value={costInput}
+                  onChange={(e) => setCostInput(e.target.value)}
+                  className="border border-slate-200 rounded-lg px-3 py-2 text-sm w-40"
+                />
+                <button
+                  onClick={() => updateStatus('company_approved', costInput)}
+                  disabled={updating}
+                  className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg"
+                >
+                  Approve
+                </button>
+              </div>
               <button
                 onClick={() => updateStatus('rejected')}
                 disabled={updating}

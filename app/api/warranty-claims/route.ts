@@ -9,6 +9,15 @@ function generateClaimNumber() {
 
 const OPEN_CLAIM_STATUSES = ['submitted', 'dealer_approved', 'company_approved'];
 
+// Chassis numbers in this system are alphanumeric (with optional hyphens),
+// between 8 and 20 characters. Anything outside this shape is rejected
+// as an invalid/suspicious chassis number before we even query the DB.
+const CHASSIS_NUMBER_REGEX = /^[A-Za-z0-9-]{8,20}$/;
+
+function isValidChassisNumber(chassisNumber: unknown): chassisNumber is string {
+  return typeof chassisNumber === 'string' && CHASSIS_NUMBER_REGEX.test(chassisNumber.trim());
+}
+
 // Fraud/duplicate detection:
 // 1. Same vehicle + same component already has an OPEN claim -> block (duplicate)
 // 2. Same vehicle + same component was REJECTED and re-submitted within 7 days -> flag as suspicious
@@ -49,6 +58,13 @@ async function checkForDuplicateOrFraud(vehicleId: number, component: string) {
 export async function POST(request: Request) {
   const body = await request.json();
   const { chassisNumber, component, remarks } = body;
+
+  if (!isValidChassisNumber(chassisNumber)) {
+    return NextResponse.json(
+      { success: false, error: 'Invalid chassis number format. Chassis numbers must be 8-20 alphanumeric characters.' },
+      { status: 400 }
+    );
+  }
 
   const session = await auth();
   const role = (session?.user as any)?.role || '';
@@ -159,7 +175,7 @@ export async function GET() {
   let query = `
     SELECT
       wc.claim_id, wc.claim_number, wc.component, wc.warranty_status_at_claim,
-      wc.status, wc.submitted_at, wc.resolved_at, wc.remarks,
+      wc.status, wc.submitted_at, wc.resolved_at, wc.remarks, wc.approved_cost, wc.is_flagged,
       v.chassis_number, c.full_name, c.phone,
       d.dealer_name
     FROM warranty_claims wc
@@ -188,7 +204,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const { claimId, newStatus, remarks } = await request.json();
+  const { claimId, newStatus, remarks, approvedCost } = await request.json();
 
   const session = await auth();
   const role = (session?.user as any)?.role || '';
@@ -218,9 +234,12 @@ export async function PATCH(request: Request) {
     }
 
     if (isResolved) {
+      const costValue = newStatus === 'company_approved' && approvedCost !== undefined && approvedCost !== null && approvedCost !== ''
+        ? Number(approvedCost)
+        : null;
       await pool.query(
-        `UPDATE warranty_claims SET status = ?, resolved_at = NOW(), remarks = COALESCE(?, remarks) WHERE claim_id = ?`,
-        [newStatus, remarks ?? null, claimId]
+        `UPDATE warranty_claims SET status = ?, resolved_at = NOW(), remarks = COALESCE(?, remarks), approved_cost = COALESCE(?, approved_cost) WHERE claim_id = ?`,
+        [newStatus, remarks ?? null, costValue, claimId]
       );
     } else {
       await pool.query(
