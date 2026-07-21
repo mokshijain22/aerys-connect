@@ -30,6 +30,8 @@ type Dealer = {
   approved_at: string | null;
   created_at: string;
   city_name: string;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 export default function DealersPage() {
@@ -45,9 +47,11 @@ export default function DealersPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [cityFilter, setCityFilter] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [form, setForm] = useState({ dealerName: '', phone: '', address: '', cityName: '' });
+  const [form, setForm] = useState({ dealerName: '', phone: '', address: '', cityName: '', latitude: null as number | null, longitude: null as number | null });
   const [editModal, setEditModal] = useState<Dealer | null>(null);
-  const [editForm, setEditForm] = useState({ dealerName: '', phone: '', address: '', cityName: '' });
+  const [editForm, setEditForm] = useState({ dealerName: '', phone: '', address: '', cityName: '', latitude: null as number | null, longitude: null as number | null });
+  const [locatingAdd, setLocatingAdd] = useState(false);
+  const [locatingEdit, setLocatingEdit] = useState(false);
   const [editStateId, setEditStateId] = useState<number | ''>('');
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -82,7 +86,7 @@ export default function DealersPage() {
   }
   function openEditModal(d: Dealer) {
     setEditModal(d);
-    setEditForm({ dealerName: d.dealer_name, phone: d.phone || '', address: d.address || '', cityName: d.city_name });
+    setEditForm({ dealerName: d.dealer_name, phone: d.phone || '', address: d.address || '', cityName: d.city_name, latitude: d.latitude, longitude: d.longitude });
     // Try to preselect the state that contains this dealer's city, so the city dropdown works immediately
     const matchState = states.find((s) => (citiesByState[s.state_id] || []).some((c) => c.city_name === d.city_name));
     setEditStateId(matchState ? matchState.state_id : '');
@@ -124,7 +128,7 @@ export default function DealersPage() {
       const json = await res.json();
       if (json.success) {
         setShowAddModal(false);
-        setForm({ dealerName: '', phone: '', address: '', cityName: '' });
+        setForm({ dealerName: '', phone: '', address: '', cityName: '', latitude: null, longitude: null });
         setSelectedStateId('');
         fetchDealers();
       } else {
@@ -136,6 +140,27 @@ export default function DealersPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function shareLocation(target: 'add' | 'edit') {
+    if (!('geolocation' in navigator)) {
+      alert('Location is not supported on this device/browser');
+      return;
+    }
+    const setLocating = target === 'add' ? setLocatingAdd : setLocatingEdit;
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (target === 'add') setForm((f) => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude }));
+        else setEditForm((f) => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude }));
+        setLocating(false);
+      },
+      () => {
+        alert('Could not fetch current location — please allow location access and try again');
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
   }
 
   const totalPages = Math.max(1, Math.ceil(dealers.length / perPage));
@@ -355,6 +380,28 @@ export default function DealersPage() {
                   className="focus-glow rounded-xl px-4 py-2.5 text-sm outline-none w-full transition-all duration-150"
                   style={{ border: `1px solid ${BORDER}` }} />
               </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>
+                  Service Centre Location <span className="font-normal" style={{ color: MUTED }}>(for nearest-dealer search)</span>
+                </label>
+                {editForm.latitude != null ? (
+                  <div className="rounded-xl p-3 flex items-center justify-between" style={{ backgroundColor: 'rgba(34,197,94,0.08)' }}>
+                    <span className="text-xs" style={{ color: GREEN }}>
+                      📍 Location set ({editForm.latitude!.toFixed(5)}, {editForm.longitude!.toFixed(5)})
+                    </span>
+                    <button type="button" onClick={() => shareLocation('edit')} disabled={locatingEdit}
+                      className="text-xs font-medium" style={{ color: MUTED }}>
+                      {locatingEdit ? 'Updating…' : 'Update'}
+                    </button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => shareLocation('edit')} disabled={locatingEdit}
+                    className="w-full text-xs font-semibold px-3 py-2.5 rounded-xl border disabled:opacity-60"
+                    style={{ borderColor: VIOLET, color: VIOLET, backgroundColor: '#fff' }}>
+                    {locatingEdit ? 'Getting location…' : '📍 Set current location as this dealer\'s location'}
+                  </button>
+                )}
+              </div>
               <button type="submit" disabled={editSubmitting}
                 className="text-sm font-semibold text-white px-5 py-2.5 rounded-xl mt-2 disabled:opacity-50 transition-all duration-200 hover:-translate-y-0.5"
                 style={{ background: `linear-gradient(135deg, ${VIOLET_LIGHT}, ${VIOLET})`, boxShadow: `0 6px 16px -6px ${VIOLET}66` }}>
@@ -414,6 +461,28 @@ export default function DealersPage() {
                   onChange={(e) => setForm({ ...form, address: e.target.value })}
                   className="focus-glow rounded-xl px-4 py-2.5 text-sm outline-none w-full transition-all duration-150"
                   style={{ border: `1px solid ${BORDER}` }} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>
+                  Service Centre Location <span className="font-normal" style={{ color: MUTED }}>(for nearest-dealer search)</span>
+                </label>
+                {form.latitude != null ? (
+                  <div className="rounded-xl p-3 flex items-center justify-between" style={{ backgroundColor: 'rgba(34,197,94,0.08)' }}>
+                    <span className="text-xs" style={{ color: GREEN }}>
+                      📍 Location set ({form.latitude!.toFixed(5)}, {form.longitude!.toFixed(5)})
+                    </span>
+                    <button type="button" onClick={() => shareLocation('add')} disabled={locatingAdd}
+                      className="text-xs font-medium" style={{ color: MUTED }}>
+                      {locatingAdd ? 'Updating…' : 'Update'}
+                    </button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => shareLocation('add')} disabled={locatingAdd}
+                    className="w-full text-xs font-semibold px-3 py-2.5 rounded-xl border disabled:opacity-60"
+                    style={{ borderColor: VIOLET, color: VIOLET, backgroundColor: '#fff' }}>
+                    {locatingAdd ? 'Getting location…' : '📍 Use my current location'}
+                  </button>
+                )}
               </div>
               <button type="submit" disabled={submitting}
                 className="text-sm font-semibold text-white px-5 py-2.5 rounded-xl mt-2 disabled:opacity-50 transition-all duration-200 hover:-translate-y-0.5"

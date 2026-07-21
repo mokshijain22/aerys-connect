@@ -9,18 +9,26 @@ const LOCATION_FRESH_MINUTES = 30;
 // close ties between technicians who are roughly equally near.
 const DISTANCE_WEIGHT = 3;
 const WORKLOAD_WEIGHT = 1;
+// Applied when the technician has specific skills set AND the job's part
+// category isn't one of them. Large enough to lose to any in-skill or
+// generalist (skills = NULL) candidate, but still a valid fallback if
+// nobody else is available.
+const SKILL_MISMATCH_PENALTY = 50;
 
-function scoreCandidate(activeJobs: number, distanceKm: number | null) {
-  if (distanceKm === null) {
-    // No fresh location -> workload-only fallback, but nudge it below any
-    // distance-scored candidate isn't guaranteed; it's simply compared on
-    // active_jobs alone against other no-location candidates.
-    return activeJobs * WORKLOAD_WEIGHT;
-  }
-  return distanceKm * DISTANCE_WEIGHT + activeJobs * WORKLOAD_WEIGHT;
+function isSkillMismatch(skills: string | null, partCategory: string | null) {
+  if (!skills || !partCategory) return false; // generalist, or job has no category — no penalty
+  const skillList = skills.split(',').map((s) => s.trim()).filter(Boolean);
+  return skillList.length > 0 && !skillList.includes(partCategory);
 }
 
-async function rankCandidates(rows: any[], destLat: number | null, destLng: number | null) {
+function scoreCandidate(activeJobs: number, distanceKm: number | null, skillMismatch: boolean) {
+  const base = distanceKm === null
+    ? activeJobs * WORKLOAD_WEIGHT
+    : distanceKm * DISTANCE_WEIGHT + activeJobs * WORKLOAD_WEIGHT;
+  return skillMismatch ? base + SKILL_MISMATCH_PENALTY : base;
+}
+
+async function rankCandidates(rows: any[], destLat: number | null, destLng: number | null, partCategory: string | null = null) {
   const withLocation = rows.filter((r) => r.tech_lat != null && r.tech_lng != null);
   const withoutLocation = rows.filter((r) => r.tech_lat == null || r.tech_lng == null);
 
@@ -29,7 +37,8 @@ async function rankCandidates(rows: any[], destLat: number | null, destLng: numb
     if (destLat != null && destLng != null && r.tech_lat != null && r.tech_lng != null) {
       distanceKm = haversineKm(destLat, destLng, Number(r.tech_lat), Number(r.tech_lng));
     }
-    return { ...r, distanceKm, score: scoreCandidate(r.active_jobs, distanceKm) };
+    const skillMismatch = isSkillMismatch(r.skills, partCategory);
+    return { ...r, distanceKm, score: scoreCandidate(r.active_jobs, distanceKm, skillMismatch) };
   });
 
   // Prefer any candidate with a usable distance score over pure guesswork,
@@ -40,9 +49,9 @@ async function rankCandidates(rows: any[], destLat: number | null, destLng: numb
   return [...scoredWithDistance, ...scoredWithoutDistance];
 }
 
-async function findLeastBusyTechnician(dealerId: number, destLat: number | null = null, destLng: number | null = null) {
+async function findLeastBusyTechnician(dealerId: number, destLat: number | null = null, destLng: number | null = null, partCategory: string | null = null) {
   const [rows]: any = await pool.query(
-    `SELECT t.technician_id,
+    `SELECT t.technician_id, t.skills,
             (SELECT COUNT(*) FROM job_cards jc2
              WHERE jc2.technician_id = t.technician_id
                AND jc2.status IN ('technician_assigned','in_progress')) AS active_jobs,
@@ -57,7 +66,7 @@ async function findLeastBusyTechnician(dealerId: number, destLat: number | null 
     [dealerId]
   );
   if (rows.length === 0) return null;
-  const ranked = await rankCandidates(rows, destLat, destLng);
+  const ranked = await rankCandidates(rows, destLat, destLng, partCategory);
   return ranked[0]?.technician_id ?? null;
 }
 
@@ -65,10 +74,11 @@ async function findLeastBusyTechnicianInSameState(
   dealerId: number,
   excludeDealerId: number,
   destLat: number | null = null,
-  destLng: number | null = null
+  destLng: number | null = null,
+  partCategory: string | null = null
 ) {
   const [rows]: any = await pool.query(
-    `SELECT t.technician_id, t.dealer_id,
+    `SELECT t.technician_id, t.dealer_id, t.skills,
             (SELECT COUNT(*) FROM job_cards jc2
              WHERE jc2.technician_id = t.technician_id
                AND jc2.status IN ('technician_assigned','in_progress')) AS active_jobs,
@@ -92,7 +102,7 @@ async function findLeastBusyTechnicianInSameState(
     [dealerId, excludeDealerId]
   );
   if (rows.length === 0) return null;
-  const ranked = await rankCandidates(rows, destLat, destLng);
+  const ranked = await rankCandidates(rows, destLat, destLng, partCategory);
   const best = ranked[0];
   if (!best) return null;
   return { technicianId: best.technician_id, dealerId: best.dealer_id };
@@ -139,14 +149,14 @@ async function assign(jobCardId: number, technicianId: number, newDealerId: numb
 export async function autoAssignOverdueJobCards() {
   // --- Case 1: rejected -> immediate reassignment to a different dealer ---
   const [rejected]: any = await pool.query(
-    `SELECT job_card_id, dealer_id, dest_latitude, dest_longitude FROM job_cards
+    `SELECT job_card_id, dealer_id, dest_latitude, dest_longitude, part_category FROM job_cards
      WHERE technician_id IS NULL AND status = 'rejected_by_dealer'`
   );
 
   for (const jc of rejected) {
     const destLat = jc.dest_latitude != null ? Number(jc.dest_latitude) : null;
     const destLng = jc.dest_longitude != null ? Number(jc.dest_longitude) : null;
-    const fallback = await findLeastBusyTechnicianInSameState(jc.dealer_id, jc.dealer_id, destLat, destLng);
+    const fallback = await findLeastBusyTechnicianInSameState(jc.dealer_id, jc.dealer_id, destLat, destLng, jc.part_category || null);
     if (fallback) {
       await assign(jc.job_card_id, fallback.technicianId, fallback.dealerId);
     }
@@ -155,7 +165,7 @@ export async function autoAssignOverdueJobCards() {
 
   // --- Case 2: no action for 15+ minutes -> same dealer first, then fallback ---
   const [overdue]: any = await pool.query(
-    `SELECT job_card_id, dealer_id, dest_latitude, dest_longitude FROM job_cards
+    `SELECT job_card_id, dealer_id, dest_latitude, dest_longitude, part_category FROM job_cards
      WHERE technician_id IS NULL
        AND status IN ('registered', 'acknowledged')
        AND (
@@ -169,12 +179,12 @@ export async function autoAssignOverdueJobCards() {
   for (const jc of overdue) {
     const destLat = jc.dest_latitude != null ? Number(jc.dest_latitude) : null;
     const destLng = jc.dest_longitude != null ? Number(jc.dest_longitude) : null;
-    const sameDealerTech = await findLeastBusyTechnician(jc.dealer_id, destLat, destLng);
+    const sameDealerTech = await findLeastBusyTechnician(jc.dealer_id, destLat, destLng, jc.part_category || null);
     if (sameDealerTech) {
       await assign(jc.job_card_id, sameDealerTech, null);
       continue;
     }
-    const fallback = await findLeastBusyTechnicianInSameState(jc.dealer_id, jc.dealer_id, destLat, destLng);
+    const fallback = await findLeastBusyTechnicianInSameState(jc.dealer_id, jc.dealer_id, destLat, destLng, jc.part_category || null);
     if (fallback) {
       await assign(jc.job_card_id, fallback.technicianId, fallback.dealerId);
     }

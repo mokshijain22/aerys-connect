@@ -11,7 +11,7 @@ export async function GET(request: Request) {
 
     let query = `
       SELECT d.dealer_id, d.dealer_name, d.phone, d.address,
-             d.is_approved, d.approved_at, d.created_at,
+             d.is_approved, d.approved_at, d.created_at, d.latitude, d.longitude,
              c.city_name
       FROM dealers d
       JOIN cities c ON d.city_id = c.city_id
@@ -103,7 +103,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ success: false, error: 'Only super admin can edit dealers' }, { status: 403 });
     }
 
-    const { dealerId, isApproved, dealerName, phone, address, cityName } = await request.json();
+    const { dealerId, isApproved, dealerName, phone, address, cityName, latitude, longitude } = await request.json();
 
     // Toggle active/inactive (existing behaviour)
     if (isApproved !== undefined && dealerName === undefined) {
@@ -129,9 +129,11 @@ export async function PATCH(request: Request) {
         dealer_name = COALESCE(?, dealer_name),
         phone = COALESCE(?, phone),
         address = COALESCE(?, address),
-        city_id = COALESCE(?, city_id)
+        city_id = COALESCE(?, city_id),
+        latitude = COALESCE(?, latitude),
+        longitude = COALESCE(?, longitude)
        WHERE dealer_id = ?`,
-      [dealerName || null, phone || null, address || null, cityId || null, dealerId]
+      [dealerName || null, phone || null, address || null, cityId || null, latitude ?? null, longitude ?? null, dealerId]
     );
 
     return NextResponse.json({ success: true });
@@ -151,7 +153,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Only super admin can add dealers' }, { status: 403 });
     }
 
-    const { dealerName, phone, address, cityName } = await request.json();
+    const { dealerName, phone, address, cityName, latitude, longitude } = await request.json();
 
     if (!dealerName || !cityName) {
       return NextResponse.json({ success: false, error: 'Dealer name and city are required' }, { status: 400 });
@@ -167,9 +169,9 @@ export async function POST(request: Request) {
     const cityId = cityRow.city_id;
 
     const [result]: any = await pool.query(
-      `INSERT INTO dealers (dealer_name, phone, address, city_id, is_approved, created_at)
-       VALUES (?, ?, ?, ?, 0, NOW())`,
-      [dealerName, phone || null, address || null, cityId]
+      `INSERT INTO dealers (dealer_name, phone, address, city_id, latitude, longitude, is_approved, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, 0, NOW())`,
+      [dealerName, phone || null, address || null, cityId, latitude ?? null, longitude ?? null]
     );
 
     return NextResponse.json({ success: true, dealerId: result.insertId });

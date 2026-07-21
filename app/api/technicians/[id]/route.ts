@@ -14,7 +14,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 
     const body = await req.json();
-    const { full_name, phone, email, is_active } = body;
+    const { full_name, phone, email, is_active, skills } = body;
 
     // Verify ownership if dealer
     if (role === 'dealer') {
@@ -45,6 +45,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (typeof is_active === 'boolean') {
       await pool.query(`UPDATE technicians SET is_active = ? WHERE technician_id = ?`, [is_active ? 1 : 0, technicianId]);
       await pool.query(`UPDATE users SET is_active = ? WHERE user_id = ?`, [is_active ? 1 : 0, tech.user_id]);
+    }
+
+    if (skills !== undefined) {
+      await pool.query(`UPDATE technicians SET skills = ? WHERE technician_id = ?`, [skills || null, technicianId]);
     }
 
     return NextResponse.json({ success: true });

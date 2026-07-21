@@ -17,7 +17,7 @@ export async function GET() {
 
   try {
     let query = `
-      SELECT t.technician_id, t.dealer_id, t.is_active, t.created_at, u.full_name, u.phone, u.email, d.dealer_name
+      SELECT t.technician_id, t.dealer_id, t.is_active, t.created_at, t.skills, u.full_name, u.phone, u.email, d.dealer_name
       FROM technicians t
       JOIN users u ON t.user_id = u.user_id
       JOIN dealers d ON t.dealer_id = d.dealer_id
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
   const conn = await pool.getConnection();
   try {
     const body = await req.json();
-    const { full_name, phone, email, password, dealer_id: bodyDealerId } = body;
+    const { full_name, phone, email, password, dealer_id: bodyDealerId, skills } = body;
 
     if (!full_name || !phone || !password) {
       return NextResponse.json({ success: false, error: 'full_name, phone, and password are required' }, { status: 400 });
@@ -75,8 +75,8 @@ export async function POST(req: Request) {
     );
 
     const [techResult]: any = await conn.query(
-      `INSERT INTO technicians (user_id, dealer_id, is_active) VALUES (?, ?, 1)`,
-      [userResult.insertId, dealer_id]
+      `INSERT INTO technicians (user_id, dealer_id, is_active, skills) VALUES (?, ?, 1, ?)`,
+      [userResult.insertId, dealer_id, skills || null]
     );
 
     await conn.commit();

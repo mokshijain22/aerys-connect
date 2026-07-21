@@ -1,4 +1,5 @@
 import { pool } from './db';
+import { sendWhatsAppMessage } from './whatsappSend';
 
 type NotifyParams = {
   userId?: number | null;
@@ -20,14 +21,24 @@ export async function sendNotification({ userId, phone, title, message, jobCardI
   try {
     console.log(`[NOTIFY] → ${phone || 'user:' + userId} | ${title}: ${message}`);
 
-    // TODO: when ready, call real gateway here, e.g.:
-    // await fetch('https://api.whatsapp-provider.com/send', { ... })
-
     await pool.query(
       `INSERT INTO notifications (user_id, phone, channel, title, message, job_card_id)
        VALUES (?, ?, 'in_app', ?, ?, ?)`,
       [userId || null, phone || null, title, message, jobCardId || null]
     );
+
+    // Best-effort WhatsApp push alongside the in-app notification.
+    // Phone numbers in this system are stored as 10-digit local numbers
+    // (e.g. "9876543210"), but the WhatsApp Graph API needs the country
+    // code prefixed (e.g. "919876543210") — same format the webhook
+    // gives us in `message.from`.
+    if (phone) {
+      const digitsOnly = phone.replace(/\D/g, '');
+      const waNumber = digitsOnly.length === 10 ? `91${digitsOnly}` : digitsOnly;
+      sendWhatsAppMessage(waNumber, `*${title}*\n${message}`).catch((err) => {
+        console.error('WhatsApp notify failed:', err.message);
+      });
+    }
   } catch (err: any) {
     console.error('sendNotification failed:', err.message);
     // never throw — a notification failure must not break the main flow

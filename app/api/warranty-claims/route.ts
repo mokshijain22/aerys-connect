@@ -55,6 +55,38 @@ async function checkForDuplicateOrFraud(vehicleId: number, component: string) {
   return { blocked: false, flagged: false };
 }
 
+// Suspicious dealer activity: a dealer whose claims are flagged or rejected
+// unusually often (vs. total claims filed) in a rolling 30-day window gets
+// surfaced — doesn't block the claim, just marks it for admin review.
+const SUSPICIOUS_MIN_CLAIMS = 5;      // don't judge a dealer on too small a sample
+const SUSPICIOUS_FLAG_RATE = 0.4;     // 40%+ flagged/rejected in the window looks unusual
+
+async function checkSuspiciousDealerActivity(dealerId: number) {
+  const [rows]: any = await pool.query(
+    `SELECT wc.status, wc.is_flagged
+     FROM warranty_claims wc
+     JOIN job_cards jc ON wc.job_card_id = jc.job_card_id
+     WHERE jc.dealer_id = ?
+       AND wc.deleted_at IS NULL
+       AND wc.submitted_at > DATE_SUB(NOW(), INTERVAL 30 DAY)`,
+    [dealerId]
+  );
+
+  const total = rows.length;
+  if (total < SUSPICIOUS_MIN_CLAIMS) return { suspicious: false };
+
+  const flaggedOrRejected = rows.filter((r: any) => r.is_flagged === 1 || r.status === 'rejected').length;
+  const rate = flaggedOrRejected / total;
+
+  if (rate >= SUSPICIOUS_FLAG_RATE) {
+    return {
+      suspicious: true,
+      reason: `Dealer has ${flaggedOrRejected}/${total} claims flagged or rejected in the last 30 days (${Math.round(rate * 100)}%) — above the normal pattern.`,
+    };
+  }
+  return { suspicious: false };
+}
+
 export async function POST(request: Request) {
   const body = await request.json();
   const { chassisNumber, component, remarks } = body;
@@ -133,23 +165,30 @@ export async function POST(request: Request) {
       );
     }
 
+    // --- Suspicious dealer activity check (doesn't block, just flags) ---
+    const dealerCheck = await checkSuspiciousDealerActivity(vehicle.dealer_id);
+
+    const isFlagged = duplicateCheck.flagged || dealerCheck.suspicious;
+    const flagReasons = [duplicateCheck.flagged && duplicateCheck.reason, dealerCheck.suspicious && dealerCheck.reason]
+      .filter(Boolean) as string[];
+
     const claimNumber = generateClaimNumber();
-    const finalRemarks = duplicateCheck.flagged
-      ? `${remarks ?? ''}\n[SYSTEM FLAG: ${duplicateCheck.reason}]`.trim()
+    const finalRemarks = flagReasons.length
+      ? `${remarks ?? ''}\n[SYSTEM FLAG: ${flagReasons.join(' | ')}]`.trim()
       : remarks ?? null;
 
     await pool.query(
       `INSERT INTO warranty_claims
         (claim_number, job_card_id, vehicle_id, component, warranty_status_at_claim, remarks, status, is_flagged)
        VALUES (?, ?, ?, ?, ?, ?, 'submitted', ?)`,
-      [claimNumber, jobCardId, vehicle.vehicle_id, component, warrantyStatusAtClaim, finalRemarks, duplicateCheck.flagged ? 1 : 0]
+      [claimNumber, jobCardId, vehicle.vehicle_id, component, warrantyStatusAtClaim, finalRemarks, isFlagged ? 1 : 0]
     );
 
     return NextResponse.json({
       success: true,
       claimNumber,
-      flagged: duplicateCheck.flagged,
-      flagReason: duplicateCheck.flagged ? duplicateCheck.reason : undefined,
+      flagged: isFlagged,
+      flagReason: flagReasons.length ? flagReasons.join(' | ') : undefined,
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

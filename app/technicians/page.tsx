@@ -19,6 +19,8 @@ const CARD_SHADOW_HOVER = '0 4px 12px rgba(20,10,50,0.06), 0 16px 36px -12px rgb
 
 const NAV = NAV_ITEMS.map((item) => ({ ...item, active: item.href === '/technicians' }));
 
+const SKILL_OPTIONS = ['Battery', 'Motor', 'Charger', 'Brakes', 'Electrical', 'Body', 'Tyres', 'Other'];
+
 type Technician = {
   technician_id: number;
   user_id: number;
@@ -29,6 +31,7 @@ type Technician = {
   phone: string;
   email: string | null;
   dealer_name: string;
+  skills: string | null;
 };
 
 export default function TechniciansPage() {
@@ -39,10 +42,13 @@ export default function TechniciansPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [form, setForm] = useState({ full_name: '', phone: '', email: '', password: '', dealerId: '' });
+  const [form, setForm] = useState({ full_name: '', phone: '', email: '', password: '', dealerId: '', skills: [] as string[] });
   const [dealerList, setDealerList] = useState<{ dealer_id: number; dealer_name: string; city_name: string }[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [page, setPage] = useState(1);
+  const [editingTech, setEditingTech] = useState<Technician | null>(null);
+  const [editSkills, setEditSkills] = useState<string[]>([]);
+  const [savingSkills, setSavingSkills] = useState(false);
   const perPage = 6;
 
   useEffect(() => {
@@ -73,7 +79,7 @@ export default function TechniciansPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const body: any = { full_name: form.full_name, phone: form.phone, email: form.email, password: form.password };
+      const body: any = { full_name: form.full_name, phone: form.phone, email: form.email, password: form.password, skills: form.skills.length ? form.skills.join(',') : null };
       if (role === 'super_admin') body.dealer_id = form.dealerId ? Number(form.dealerId) : undefined;
 
       const res = await fetch('/api/technicians', {
@@ -84,7 +90,7 @@ export default function TechniciansPage() {
       const json = await res.json();
       if (json.success) {
         setShowAddModal(false);
-        setForm({ full_name: '', phone: '', email: '', password: '', dealerId: '' });
+        setForm({ full_name: '', phone: '', email: '', password: '', dealerId: '', skills: [] });
         fetchTechnicians();
       } else {
         alert(json.error || 'Failed to add technician');
@@ -95,6 +101,13 @@ export default function TechniciansPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function toggleSkill(skill: string) {
+    setForm((f) => ({
+      ...f,
+      skills: f.skills.includes(skill) ? f.skills.filter((s) => s !== skill) : [...f.skills, skill],
+    }));
   }
 
   async function toggleActive(t: Technician) {
@@ -109,6 +122,39 @@ export default function TechniciansPage() {
       else alert(json.error || 'Failed to update');
     } catch (err) {
       console.error(err);
+    }
+  }
+
+  function openEditSkills(t: Technician) {
+    setEditingTech(t);
+    setEditSkills(t.skills ? t.skills.split(',').map((s) => s.trim()).filter(Boolean) : []);
+  }
+
+  function toggleEditSkill(skill: string) {
+    setEditSkills((s) => (s.includes(skill) ? s.filter((x) => x !== skill) : [...s, skill]));
+  }
+
+  async function saveSkills() {
+    if (!editingTech) return;
+    setSavingSkills(true);
+    try {
+      const res = await fetch(`/api/technicians/${editingTech.technician_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skills: editSkills.length ? editSkills.join(',') : null }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setEditingTech(null);
+        fetchTechnicians();
+      } else {
+        alert(json.error || 'Failed to update skills');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update skills');
+    } finally {
+      setSavingSkills(false);
     }
   }
 
@@ -223,7 +269,7 @@ export default function TechniciansPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left" style={{ color: MUTED }}>
-                    {['Name', 'Phone', 'Email', ...(role === 'super_admin' ? ['Dealer'] : []), 'Status', 'Joined', 'Actions'].map((h) => (
+                    {['Name', 'Phone', 'Email', 'Skills', ...(role === 'super_admin' ? ['Dealer'] : []), 'Status', 'Joined', 'Actions'].map((h) => (
                       <th key={h} className="px-5 py-2 font-medium text-xs">{h}</th>
                     ))}
                   </tr>
@@ -234,6 +280,11 @@ export default function TechniciansPage() {
                       <td className="px-5 py-3.5 font-semibold" style={{ color: INK }}>{t.full_name}</td>
                       <td className="px-5 py-3.5" style={{ color: MUTED }}>{t.phone}</td>
                       <td className="px-5 py-3.5" style={{ color: MUTED }}>{t.email || '-'}</td>
+                      <td className="px-5 py-3.5" style={{ color: MUTED }}>
+                        {t.skills
+                          ? <span className="text-xs">{t.skills.split(',').join(', ')}</span>
+                          : <span className="text-xs italic" style={{ color: MUTED }}>Generalist (all)</span>}
+                      </td>
                       {role === 'super_admin' && (
                         <td className="px-5 py-3.5" style={{ color: MUTED }}>{t.dealer_name}</td>
                       )}
@@ -250,21 +301,28 @@ export default function TechniciansPage() {
                         {new Date(t.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                       </td>
                       <td className="px-5 py-3.5">
-                        <button onClick={() => toggleActive(t)}
-                          className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                          style={t.is_active
-                            ? { backgroundColor: 'rgba(239,68,68,0.08)', color: RED }
-                            : { backgroundColor: 'rgba(34,197,94,0.08)', color: GREEN }}>
-                          {t.is_active ? 'Deactivate' : 'Activate'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => openEditSkills(t)}
+                            className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                            style={{ backgroundColor: VIOLET_DIM, color: VIOLET }}>
+                            Edit Skills
+                          </button>
+                          <button onClick={() => toggleActive(t)}
+                            className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                            style={t.is_active
+                              ? { backgroundColor: 'rgba(239,68,68,0.08)', color: RED }
+                              : { backgroundColor: 'rgba(34,197,94,0.08)', color: GREEN }}>
+                            {t.is_active ? 'Deactivate' : 'Activate'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
                   {loading && (
-                    <tr><td colSpan={7} className="px-5 py-8 text-center text-sm" style={{ color: MUTED }}>Loading technicians...</td></tr>
+                    <tr><td colSpan={8} className="px-5 py-8 text-center text-sm" style={{ color: MUTED }}>Loading technicians...</td></tr>
                   )}
                   {!loading && paged.length === 0 && (
-                    <tr><td colSpan={7} className="px-5 py-8 text-center text-sm" style={{ color: MUTED }}>No technicians match your search.</td></tr>
+                    <tr><td colSpan={8} className="px-5 py-8 text-center text-sm" style={{ color: MUTED }}>No technicians match your search.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -337,12 +395,58 @@ export default function TechniciansPage() {
                       className="focus-glow rounded-xl px-4 py-2.5 text-sm outline-none w-full transition-all duration-150"
                       style={{ border: `1px solid ${BORDER}` }} />
                   </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>
+                      Skills <span className="font-normal" style={{ color: MUTED }}>(leave blank = handles all job types)</span>
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {SKILL_OPTIONS.map((skill) => (
+                        <button key={skill} type="button" onClick={() => toggleSkill(skill)}
+                          className="text-xs font-semibold px-3 py-1.5 rounded-full transition-colors"
+                          style={form.skills.includes(skill)
+                            ? { background: `linear-gradient(135deg, ${VIOLET_LIGHT}, ${VIOLET})`, color: '#fff' }
+                            : { border: `1px solid ${BORDER}`, color: MUTED }}>
+                          {skill}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <button type="submit" disabled={submitting}
                     className="text-sm font-semibold text-white px-5 py-2.5 rounded-xl mt-2 disabled:opacity-50 transition-all duration-200 hover:-translate-y-0.5"
                     style={{ background: `linear-gradient(135deg, ${VIOLET_LIGHT}, ${VIOLET})`, boxShadow: `0 6px 16px -6px ${VIOLET}66` }}>
                     {submitting ? 'Adding...' : 'Add Technician'}
                   </button>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {editingTech && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}>
+              <div className="bg-white rounded-[20px] p-7 w-full max-w-md max-h-[90vh] overflow-y-auto" style={{ boxShadow: CARD_SHADOW_HOVER }}>
+                <div className="flex items-center justify-between mb-4">
+                  <p className="font-bold text-lg" style={{ color: INK }}>Edit Skills — {editingTech.full_name}</p>
+                  <button onClick={() => setEditingTech(null)} style={{ color: MUTED }}>✕</button>
+                </div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>
+                  Skills <span className="font-normal" style={{ color: MUTED }}>(leave blank = handles all job types)</span>
+                </label>
+                <div className="flex flex-wrap gap-2 mb-5">
+                  {SKILL_OPTIONS.map((skill) => (
+                    <button key={skill} type="button" onClick={() => toggleEditSkill(skill)}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-full transition-colors"
+                      style={editSkills.includes(skill)
+                        ? { background: `linear-gradient(135deg, ${VIOLET_LIGHT}, ${VIOLET})`, color: '#fff' }
+                        : { border: `1px solid ${BORDER}`, color: MUTED }}>
+                      {skill}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={saveSkills} disabled={savingSkills}
+                  className="text-sm font-semibold text-white px-5 py-2.5 rounded-xl w-full disabled:opacity-50 transition-all duration-200 hover:-translate-y-0.5"
+                  style={{ background: `linear-gradient(135deg, ${VIOLET_LIGHT}, ${VIOLET})`, boxShadow: `0 6px 16px -6px ${VIOLET}66` }}>
+                  {savingSkills ? 'Saving...' : 'Save Skills'}
+                </button>
               </div>
             </div>
           )}
