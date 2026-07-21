@@ -3,6 +3,7 @@ import { pool } from '@/app/lib/db';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { auth } from '@/auth';
+import { notifyCustomerForJobCard } from '@/app/lib/notifications';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,6 +77,30 @@ export async function POST(
         `UPDATE job_cards SET status = 'delivered', delivered_at = NOW() WHERE job_card_id = ?`,
         [jobCardId]
       );
+
+      // Best-effort: invoice-ready + feedback request over WhatsApp/in-app bell.
+      // Never let a notification failure block the delivery confirmation.
+      try {
+        const [[invRow]]: any = await pool.query(
+          `SELECT invoice_number, total_amount FROM invoices WHERE job_card_id = ?`,
+          [jobCardId]
+        );
+        if (invRow) {
+          await notifyCustomerForJobCard(
+            jobCardId,
+            'Invoice Ready',
+            `Your invoice ${invRow.invoice_number} (Rs. ${Number(invRow.total_amount).toFixed(2)}) is ready. You can download it from your service history.`
+          );
+        }
+        await notifyCustomerForJobCard(
+          jobCardId,
+          'How was your service?',
+          `Your vehicle has been delivered. We'd love your feedback — please rate your recent service.`
+        );
+      } catch (notifyErr: any) {
+        console.error('Delivery notification failed:', notifyErr.message);
+      }
+
       return NextResponse.json({ success: true });
     }
 

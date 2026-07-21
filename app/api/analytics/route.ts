@@ -85,7 +85,7 @@ export async function GET(request: Request) {
       else if (row.status === 'cancelled') statusMap.Cancelled += row.count;
     }
 
-    const [[serviceTypeRawRows], [partRows], [revenueTrendRows], [dealerRevenueRows], [technicianRatingRows], [faultRows]] = await Promise.all([
+    const [[serviceTypeRawRows], [partRows], [revenueTrendRows], [dealerRevenueRows], [technicianRatingRows], [faultRows], [modelFaultRows]] = await Promise.all([
       pool.query(
         `SELECT service_type, COUNT(*) AS count
          FROM job_cards
@@ -147,6 +147,17 @@ export async function GET(request: Request) {
          LIMIT 8`,
         [`${from} 00:00:00`, `${to} 23:59:59`]
       ),
+      pool.query(
+        `SELECT vm.model_name, jc.symptom_type, COUNT(*) AS count
+         FROM job_cards jc
+         JOIN vehicles v ON jc.vehicle_id = v.vehicle_id
+         JOIN vehicle_models vm ON v.model_id = vm.model_id
+         WHERE jc.symptom_type IS NOT NULL AND jc.symptom_type != ''
+           AND jc.registered_at BETWEEN ? AND ?
+         GROUP BY vm.model_id, jc.symptom_type
+         ORDER BY vm.model_name ASC, count DESC`,
+        [`${from} 00:00:00`, `${to} 23:59:59`]
+      ),
     ]) as any;
 
     const topIssueCategories = serviceTypeRawRows.map((r: any) => ({ label: r.service_type, count: r.count }));
@@ -162,6 +173,14 @@ export async function GET(request: Request) {
 
     const topFaults = faultRows.map((r: any) => ({ label: r.symptom_type, count: r.count }));
 
+    const faultsByModel: Record<string, { label: string; count: number }[]> = {};
+    for (const row of modelFaultRows) {
+      if (!faultsByModel[row.model_name]) faultsByModel[row.model_name] = [];
+      if (faultsByModel[row.model_name].length < 5) {
+        faultsByModel[row.model_name].push({ label: row.symptom_type, count: row.count });
+      }
+    }
+
     const payloadBase = {
       current, changes: {}, previous,
       jobsTrend: trendRows.map((r: any) => ({ day: r.day, totalJobs: r.total_jobs, completedJobs: r.completed_jobs })),
@@ -169,6 +188,7 @@ export async function GET(request: Request) {
       jobsByServiceType: serviceTypeData,
       topIssueCategories,
       topFaults,
+      faultsByModel,
       revenueTrend: revenueTrendRows.map((r: any) => ({ day: r.day, revenue: r.revenue || 0 })),
       topDealers: dealerRevenueRows.map((r: any) => ({
         id: r.dealer_id,

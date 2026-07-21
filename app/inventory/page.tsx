@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { ResponsiveLayout } from '@/app/components/ResponsiveLayout';
 import { NAV_ITEMS } from '@/app/lib/nav-items';
+import { QRCodeSVG } from 'qrcode.react';
 
 const VIOLET = '#6C5CE7';
 const VIOLET_LIGHT = '#8B7CF8';
@@ -64,6 +65,11 @@ export default function InventoryPage() {
   const [reorderLoading, setReorderLoading] = useState(true);
   const [mode, setMode] = useState<'existing' | 'new'>('existing');
   const [submitting, setSubmitting] = useState(false);
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [returnSubmitting, setReturnSubmitting] = useState(false);
+  const [returnForm, setReturnForm] = useState({ partId: '', dealerId: '', quantity: '', reason: '' });
+  const [showScanModal, setShowScanModal] = useState(false);
+  const scannerRef = useRef<any>(null);
   const [form, setForm] = useState({
     partId: '', dealerId: '', quantity: '', minStockAlert: '',
     partName: '', partCode: '', unitPrice: '', category: '',
@@ -130,6 +136,61 @@ export default function InventoryPage() {
       setLoading(false);
     }
   }
+  useEffect(() => {
+    if (!showScanModal) return;
+    let cancelled = false;
+    import('html5-qrcode').then(({ Html5Qrcode }) => {
+      if (cancelled) return;
+      const scanner = new Html5Qrcode('part-scan-region');
+      scannerRef.current = scanner;
+      scanner
+        .start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: 220 },
+          (decodedText: string) => {
+            setSearch(decodedText);
+            setShowScanModal(false);
+          },
+          () => {}
+        )
+        .catch((err: any) => console.error('Scanner start failed:', err));
+    });
+    return () => {
+      cancelled = true;
+      if (scannerRef.current) {
+        scannerRef.current.stop().then(() => scannerRef.current.clear()).catch(() => {});
+        scannerRef.current = null;
+      }
+    };
+  }, [showScanModal]);
+
+  async function handleReportReturn(e: React.FormEvent) {
+    e.preventDefault();
+    setReturnSubmitting(true);
+    try {
+      const res = await fetch('/api/inventory/returns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          partId: returnForm.partId,
+          dealerId: returnForm.dealerId,
+          quantity: Number(returnForm.quantity),
+          reason: returnForm.reason,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setShowReturnModal(false);
+        setReturnForm({ partId: '', dealerId: '', quantity: '', reason: '' });
+        fetchInventory();
+      } else {
+        alert(json.error || 'Failed to report return');
+      }
+    } finally {
+      setReturnSubmitting(false);
+    }
+  }
+
   async function handleAddItem(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
@@ -213,11 +274,23 @@ export default function InventoryPage() {
       <div className="rounded-[20px] p-7 mb-6 relative overflow-hidden fade-up" style={{ background: `linear-gradient(135deg, ${VIOLET_DIM}, rgba(245,166,35,0.05))`, border: `1px solid ${BORDER}`, boxShadow: CARD_SHADOW }}>
         <h1 className="text-[28px] font-extrabold tracking-tight" style={{ color: INK }}>Inventory</h1>
         <p className="text-sm mt-2" style={{ color: MUTED }}>Track and manage parts and stock levels across dealers</p>
-        <button onClick={() => setShowAddModal(true)}
-          className="text-sm font-semibold text-white px-5 py-2.5 rounded-xl absolute top-7 right-7 transition-all duration-200 hover:-translate-y-0.5"
-          style={{ background: `linear-gradient(135deg, ${VIOLET_LIGHT}, ${VIOLET})`, boxShadow: `0 6px 16px -6px ${VIOLET}66` }}>
-          + Add Item
-        </button>
+        <div className="absolute top-7 right-7 flex items-center gap-2.5">
+          <button onClick={() => setShowScanModal(true)}
+            className="text-sm font-semibold px-5 py-2.5 rounded-xl transition-all duration-200 hover:-translate-y-0.5"
+            style={{ backgroundColor: '#fff', color: VIOLET, border: `1px solid ${VIOLET}55` }}>
+            📷 Scan Part
+          </button>
+          <button onClick={() => setShowReturnModal(true)}
+            className="text-sm font-semibold px-5 py-2.5 rounded-xl transition-all duration-200 hover:-translate-y-0.5"
+            style={{ backgroundColor: '#fff', color: RED, border: `1px solid ${RED}55` }}>
+            Report Damaged Part
+          </button>
+          <button onClick={() => setShowAddModal(true)}
+            className="text-sm font-semibold text-white px-5 py-2.5 rounded-xl transition-all duration-200 hover:-translate-y-0.5"
+            style={{ background: `linear-gradient(135deg, ${VIOLET_LIGHT}, ${VIOLET})`, boxShadow: `0 6px 16px -6px ${VIOLET}66` }}>
+            + Add Item
+          </button>
+        </div>
       </div>
 
       {/* Stat cards */}
@@ -344,7 +417,7 @@ export default function InventoryPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left" style={{ color: MUTED }}>
-                {['Part Code', 'Part Name', 'Category', 'Dealer', 'Stock', 'Status', 'Unit Price', 'Value'].map((h) => (
+                {['Part Code', 'Part Name', 'Category', 'Dealer', 'Stock', 'Status', 'Unit Price', 'Value', 'QR'].map((h) => (
                   <th key={h} className="px-5 py-2 font-medium text-xs">{h}</th>
                 ))}
               </tr>
@@ -368,14 +441,23 @@ export default function InventoryPage() {
                     </td>
                     <td className="px-5 py-3.5" style={{ color: MUTED }}>₹{Number(r.unit_price).toLocaleString('en-IN')}</td>
                     <td className="px-5 py-3.5 font-semibold" style={{ color: INK }}>₹{(r.quantity * r.unit_price).toLocaleString('en-IN')}</td>
+                    <td className="px-5 py-3.5">
+                      <button
+                        onClick={() => window.open(`/inventory/${encodeURIComponent(r.part_code)}/qr-print`, '_blank')}
+                        title="View / print QR code"
+                        className="p-1.5 rounded-lg border transition-colors hover:bg-[rgba(108,92,231,0.06)]"
+                        style={{ borderColor: BORDER }}>
+                        <QRCodeSVG value={r.part_code} size={22} />
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
               {loading && (
-                <tr><td colSpan={7} className="px-5 py-8 text-center text-sm" style={{ color: MUTED }}>Loading...</td></tr>
+                <tr><td colSpan={8} className="px-5 py-8 text-center text-sm" style={{ color: MUTED }}>Loading...</td></tr>
               )}
               {!loading && paged.length === 0 && (
-                <tr><td colSpan={7} className="px-5 py-8 text-center text-sm" style={{ color: MUTED }}>No items match your search.</td></tr>
+                <tr><td colSpan={8} className="px-5 py-8 text-center text-sm" style={{ color: MUTED }}>No items match your search.</td></tr>
               )}
             </tbody>
           </table>
@@ -504,6 +586,74 @@ export default function InventoryPage() {
                 {submitting ? 'Adding...' : 'Add Item'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+      {showReturnModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}>
+          <div className="bg-white rounded-[20px] p-7 w-full max-w-md max-h-[90vh] overflow-y-auto" style={{ boxShadow: CARD_SHADOW_HOVER }}>
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-bold text-lg" style={{ color: INK }}>Report Damaged Part</p>
+              <button onClick={() => setShowReturnModal(false)} style={{ color: MUTED }}>✕</button>
+            </div>
+            <form onSubmit={handleReportReturn} className="flex flex-col gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Part *</label>
+                <select required value={returnForm.partId}
+                  onChange={(e) => setReturnForm({ ...returnForm, partId: e.target.value })}
+                  className="focus-glow rounded-xl px-4 py-2.5 text-sm outline-none w-full transition-all duration-150"
+                  style={{ border: `1px solid ${BORDER}` }}>
+                  <option value="">Select a part</option>
+                  {parts.map((p) => (
+                    <option key={p.part_id} value={p.part_id}>{p.part_name} ({p.part_code})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Dealer *</label>
+                <select required value={returnForm.dealerId}
+                  onChange={(e) => setReturnForm({ ...returnForm, dealerId: e.target.value })}
+                  className="focus-glow rounded-xl px-4 py-2.5 text-sm outline-none w-full transition-all duration-150"
+                  style={{ border: `1px solid ${BORDER}` }}>
+                  <option value="">Select a dealer</option>
+                  {dealers.map((d) => (
+                    <option key={d.dealer_id} value={d.dealer_id}>{d.dealer_name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Quantity *</label>
+                <input required type="number" min="1" value={returnForm.quantity}
+                  onChange={(e) => setReturnForm({ ...returnForm, quantity: e.target.value })}
+                  className="focus-glow rounded-xl px-4 py-2.5 text-sm outline-none w-full transition-all duration-150"
+                  style={{ border: `1px solid ${BORDER}` }} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Reason *</label>
+                <input required value={returnForm.reason}
+                  onChange={(e) => setReturnForm({ ...returnForm, reason: e.target.value })}
+                  placeholder="e.g. Cracked casing on arrival"
+                  className="focus-glow rounded-xl px-4 py-2.5 text-sm outline-none w-full transition-all duration-150"
+                  style={{ border: `1px solid ${BORDER}` }} />
+              </div>
+              <button type="submit" disabled={returnSubmitting}
+                className="text-sm font-semibold text-white px-5 py-2.5 rounded-xl mt-2 disabled:opacity-50 transition-all duration-200 hover:-translate-y-0.5"
+                style={{ background: `linear-gradient(135deg, ${VIOLET_LIGHT}, ${VIOLET})`, boxShadow: `0 6px 16px -6px ${VIOLET}66` }}>
+                {returnSubmitting ? 'Reporting...' : 'Report Return'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+      {showScanModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}>
+          <div className="bg-white rounded-[20px] p-7 w-full max-w-sm" style={{ boxShadow: CARD_SHADOW_HOVER }}>
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-bold text-lg" style={{ color: INK }}>Scan Part Code</p>
+              <button onClick={() => setShowScanModal(false)} style={{ color: MUTED }}>✕</button>
+            </div>
+            <p className="text-xs mb-3" style={{ color: MUTED }}>Point your camera at a part's QR code.</p>
+            <div id="part-scan-region" style={{ width: '100%', borderRadius: 16, overflow: 'hidden' }} />
           </div>
         </div>
       )}

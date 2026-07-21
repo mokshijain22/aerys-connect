@@ -3,11 +3,13 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { generateInvoiceForJobCard } from '../../lib/invoice';
 import { autoAssignOverdueJobCards } from '../../lib/autoAssign';
+import { sendNextServiceReminders } from '../../lib/serviceReminders';
 import { notifyCustomerForJobCard, notifyDealerForJobCard } from '../../lib/notifications';
 
 export const dynamic = 'force-dynamic';
 
 let lastAutoAssignRun = 0;
+let lastServiceReminderRun = 0;
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;
@@ -158,6 +160,12 @@ export async function GET() {
          AND status NOT IN ('delivered', 'cancelled')
          AND TIMESTAMPDIFF(MINUTE, registered_at, NOW()) > 360`
     ).catch((err) => console.error('escalation update failed:', err));
+  }
+  // Service reminders are a daily check, not a per-minute one — separate,
+  // longer throttle so we don't scan job_cards on every request.
+  if (now - lastServiceReminderRun > 24 * 60 * 60 * 1000) {
+    lastServiceReminderRun = now;
+    sendNextServiceReminders().catch((err) => console.error('service reminders failed:', err));
   }
 
   let technicianRecordId: number | null = null;

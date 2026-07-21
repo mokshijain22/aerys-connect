@@ -49,6 +49,7 @@ type AnalyticsData = {
   topTechnicians: { id: number; name: string; avgRating: number | null; ratingCount: number }[];
   topIssueCategories: { label: string; count: number }[];
   topFaults: { label: string; count: number }[];
+  faultsByModel: Record<string, { label: string; count: number }[]>;
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -511,6 +512,35 @@ export default function AnalyticsPage() {
               </div>
             );
           })}
+        </div>
+
+        {/* Faults by vehicle model */}
+        <div className="rounded-[20px] p-6 bg-white border mb-6 fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+          <p className="font-bold text-[15px] mb-5" style={{ color: INK }}>Faults by Vehicle Model</p>
+          {data && Object.keys(data.faultsByModel).length === 0 && (
+            <p className="text-sm" style={{ color: MUTED }}>No symptom data for this range.</p>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            {data && Object.entries(data.faultsByModel).map(([modelName, faults]) => {
+              const max = Math.max(...faults.map((f) => f.count), 1);
+              return (
+                <div key={modelName} className="rounded-2xl p-4 border" style={{ borderColor: BORDER }}>
+                  <p className="text-sm font-semibold mb-3" style={{ color: INK }}>{modelName}</p>
+                  {faults.map((f) => (
+                    <div key={f.label} className="mb-2.5">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs capitalize" style={{ color: MUTED }}>{f.label.replace(/_/g, ' ')}</span>
+                        <span className="text-xs font-semibold" style={{ color: INK }}>{f.count}</span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(245,166,35,0.12)' }}>
+                        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${(f.count / max) * 100}%`, background: `linear-gradient(90deg, ${ORANGE}, #F5A623)` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Jobs by service type */}

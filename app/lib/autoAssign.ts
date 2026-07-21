@@ -14,6 +14,10 @@ const WORKLOAD_WEIGHT = 1;
 // generalist (skills = NULL) candidate, but still a valid fallback if
 // nobody else is available.
 const SKILL_MISMATCH_PENALTY = 50;
+// Applied when the job needs a specific part category and the technician's
+// dealer has none in stock. Smaller than the skill penalty (skill mismatch
+// is a harder blocker; parts can still be sourced after assignment).
+const PARTS_UNAVAILABLE_PENALTY = 10;
 
 function isSkillMismatch(skills: string | null, partCategory: string | null) {
   if (!skills || !partCategory) return false; // generalist, or job has no category — no penalty
@@ -21,11 +25,12 @@ function isSkillMismatch(skills: string | null, partCategory: string | null) {
   return skillList.length > 0 && !skillList.includes(partCategory);
 }
 
-function scoreCandidate(activeJobs: number, distanceKm: number | null, skillMismatch: boolean) {
+function scoreCandidate(activeJobs: number, distanceKm: number | null, skillMismatch: boolean, partsUnavailable: boolean) {
   const base = distanceKm === null
     ? activeJobs * WORKLOAD_WEIGHT
     : distanceKm * DISTANCE_WEIGHT + activeJobs * WORKLOAD_WEIGHT;
-  return skillMismatch ? base + SKILL_MISMATCH_PENALTY : base;
+  const withSkillPenalty = skillMismatch ? base + SKILL_MISMATCH_PENALTY : base;
+  return partsUnavailable ? withSkillPenalty + PARTS_UNAVAILABLE_PENALTY : withSkillPenalty;
 }
 
 async function rankCandidates(rows: any[], destLat: number | null, destLng: number | null, partCategory: string | null = null) {
@@ -38,7 +43,8 @@ async function rankCandidates(rows: any[], destLat: number | null, destLng: numb
       distanceKm = haversineKm(destLat, destLng, Number(r.tech_lat), Number(r.tech_lng));
     }
     const skillMismatch = isSkillMismatch(r.skills, partCategory);
-    return { ...r, distanceKm, score: scoreCandidate(r.active_jobs, distanceKm, skillMismatch) };
+    const partsUnavailable = r.has_stock === false;
+    return { ...r, distanceKm, score: scoreCandidate(r.active_jobs, distanceKm, skillMismatch, partsUnavailable) };
   });
 
   // Prefer any candidate with a usable distance score over pure guesswork,
@@ -55,7 +61,12 @@ async function findLeastBusyTechnician(dealerId: number, destLat: number | null 
             (SELECT COUNT(*) FROM job_cards jc2
              WHERE jc2.technician_id = t.technician_id
                AND jc2.status IN ('technician_assigned','in_progress')) AS active_jobs,
-            tl.latitude AS tech_lat, tl.longitude AS tech_lng
+            tl.latitude AS tech_lat, tl.longitude AS tech_lng,
+            CASE WHEN ? IS NULL THEN NULL ELSE EXISTS (
+              SELECT 1 FROM dealer_stock ds
+              JOIN spare_parts sp ON sp.part_id = ds.part_id
+              WHERE ds.dealer_id = t.dealer_id AND sp.category = ? AND ds.quantity > 0
+            ) END AS has_stock
      FROM technicians t
      LEFT JOIN technician_locations tl
        ON tl.technician_id = t.technician_id
@@ -63,7 +74,7 @@ async function findLeastBusyTechnician(dealerId: number, destLat: number | null 
      WHERE t.dealer_id = ?
        AND t.is_active = 1
        AND t.deleted_at IS NULL`,
-    [dealerId]
+    [partCategory, partCategory, dealerId]
   );
   if (rows.length === 0) return null;
   const ranked = await rankCandidates(rows, destLat, destLng, partCategory);
@@ -82,7 +93,12 @@ async function findLeastBusyTechnicianInSameState(
             (SELECT COUNT(*) FROM job_cards jc2
              WHERE jc2.technician_id = t.technician_id
                AND jc2.status IN ('technician_assigned','in_progress')) AS active_jobs,
-            tl.latitude AS tech_lat, tl.longitude AS tech_lng
+            tl.latitude AS tech_lat, tl.longitude AS tech_lng,
+            CASE WHEN ? IS NULL THEN NULL ELSE EXISTS (
+              SELECT 1 FROM dealer_stock ds
+              JOIN spare_parts sp ON sp.part_id = ds.part_id
+              WHERE ds.dealer_id = t.dealer_id AND sp.category = ? AND ds.quantity > 0
+            ) END AS has_stock
      FROM technicians t
      JOIN dealers d ON t.dealer_id = d.dealer_id
      JOIN cities c ON d.city_id = c.city_id
@@ -99,7 +115,7 @@ async function findLeastBusyTechnicianInSameState(
      AND t.dealer_id != ?
      AND t.is_active = 1
      AND t.deleted_at IS NULL`,
-    [dealerId, excludeDealerId]
+    [partCategory, partCategory, dealerId, excludeDealerId]
   );
   if (rows.length === 0) return null;
   const ranked = await rankCandidates(rows, destLat, destLng, partCategory);
