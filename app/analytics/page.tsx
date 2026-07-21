@@ -32,6 +32,7 @@ type AnalyticsSummary = {
   customerRatingCount: number;
   avgTechnicianRating: number | null;
   technicianRatingCount: number;
+  sixHourSuccessRate: number;
 };
 
 type AnalyticsData = {
@@ -45,6 +46,7 @@ type AnalyticsData = {
   topDealers: { id: number; name: string; revenue: number; avgRating: number | null }[];
   topTechnicians: { id: number; name: string; avgRating: number | null; ratingCount: number }[];
   topIssueCategories: { label: string; count: number }[];
+  topFaults: { label: string; count: number }[];
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -172,6 +174,7 @@ export default function AnalyticsPage() {
             { label: 'Avg. Resolution Time', value: `${data.current.avgResolutionDays} Days`, change: data.changes.avgResolutionDays, icon: '⏱️', suffix: ' days', lowerIsBetter: true },
             { label: 'Completed Jobs', value: data.current.completedJobs, change: data.changes.completedJobs, icon: '✅' },
             { label: 'Revenue (parts)', value: formatLakh(data.current.revenue), change: data.changes.revenue, icon: '₹' },
+            { label: '6-Hour Success Rate', value: `${data.current.sixHourSuccessRate}%`, change: data.changes.sixHourSuccessRate, icon: '🎯' },
             {
               label: 'Avg Customer Rating',
               value: data.current.avgCustomerRating ? `${data.current.avgCustomerRating} ★` : '—',
@@ -274,6 +277,7 @@ export default function AnalyticsPage() {
                     ['Warranty Claims', data.current.warrantyClaims, data.previous.warrantyClaims, data.changes.warrantyClaims],
                     ['Avg. Resolution', `${data.current.avgResolutionDays}d`, `${data.previous.avgResolutionDays}d`, data.changes.avgResolutionDays],
                     ['Revenue', formatLakh(data.current.revenue), formatLakh(data.previous.revenue), data.changes.revenue],
+                    ['6-Hour Success Rate', `${data.current.sixHourSuccessRate}%`, `${data.previous.sixHourSuccessRate}%`, data.changes.sixHourSuccessRate],
                   ] as Array<[string, number | string, number | string, number]>).map((row) => (
                     <tr key={row[0]} className="border-t transition-colors duration-150 hover:bg-[rgba(108,92,231,0.04)]" style={{ borderColor: BORDER }}>
                       <td className="py-2.5" style={{ color: INK, fontWeight: 600 }}>{row[0]}</td>
@@ -373,6 +377,26 @@ export default function AnalyticsPage() {
                 </div>
                 <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: VIOLET_DIM }}>
                   <div className="h-full rounded-full transition-all duration-700" style={{ width: `${(c.count / max) * 100}%`, background: `linear-gradient(90deg, ${VIOLET_LIGHT}, ${VIOLET})` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Most common faults */}
+        <div className="rounded-[20px] p-6 bg-white border mb-6 fade-up" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+          <p className="font-bold text-[15px] mb-5" style={{ color: INK }}>Most Common Faults (by reported symptom)</p>
+          {data?.topFaults.length === 0 && <p className="text-sm" style={{ color: MUTED }}>No symptom data for this range.</p>}
+          {data?.topFaults.map((f) => {
+            const max = Math.max(...(data?.topFaults.map((x) => x.count) ?? [1]), 1);
+            return (
+              <div key={f.label} className="mb-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs capitalize" style={{ color: MUTED }}>{f.label.replace(/_/g, ' ')}</span>
+                  <span className="text-xs font-semibold" style={{ color: INK }}>{f.count}</span>
+                </div>
+                <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(245,166,35,0.12)' }}>
+                  <div className="h-full rounded-full transition-all duration-700" style={{ width: `${(f.count / max) * 100}%`, background: `linear-gradient(90deg, ${ORANGE}, #F5A623)` }} />
                 </div>
               </div>
             );

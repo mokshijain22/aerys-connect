@@ -16,7 +16,7 @@ async function rangeStats(from: string, to: string) {
 
   const [
     [[vehicleCount]], [[jobCount]], [[claimCount]], [[completedCount]], [[resolutionRow]], [[revenueRow]],
-    [[customerRatingRow]], [[technicianRatingRow]],
+    [[customerRatingRow]], [[technicianRatingRow]], [[slaRow]],
   ]: any = await Promise.all([
     pool.query(`SELECT COUNT(*) AS total FROM vehicles`),
     pool.query(`SELECT COUNT(*) AS total FROM job_cards WHERE registered_at BETWEEN ? AND ?`, dateParams),
@@ -26,6 +26,7 @@ async function rangeStats(from: string, to: string) {
     pool.query(`SELECT SUM(jcpu.quantity * sp.unit_price) AS total FROM job_card_parts_used jcpu JOIN spare_parts sp ON jcpu.part_id = sp.part_id JOIN job_cards jc ON jcpu.job_card_id = jc.job_card_id WHERE jc.registered_at BETWEEN ? AND ?`, dateParams),
     pool.query(`SELECT AVG(jcr.rating) AS avg_rating, COUNT(*) AS count FROM job_card_reviews jcr JOIN job_cards jc ON jcr.job_card_id = jc.job_card_id WHERE jcr.reviewer_role = 'customer' AND jc.registered_at BETWEEN ? AND ?`, dateParams),
     pool.query(`SELECT AVG(jcr.rating) AS avg_rating, COUNT(*) AS count FROM job_card_reviews jcr JOIN job_cards jc ON jcr.job_card_id = jc.job_card_id WHERE jcr.reviewer_role = 'dealer' AND jc.registered_at BETWEEN ? AND ?`, dateParams),
+    pool.query(`SELECT COUNT(*) AS total, SUM(CASE WHEN service_completed_at IS NOT NULL AND TIMESTAMPDIFF(HOUR, registered_at, service_completed_at) <= 6 AND escalated = 0 THEN 1 ELSE 0 END) AS within_sla FROM job_cards WHERE registered_at BETWEEN ? AND ?`, dateParams),
   ]);
 
   return {
@@ -39,6 +40,7 @@ async function rangeStats(from: string, to: string) {
     customerRatingCount: customerRatingRow.count,
     avgTechnicianRating: technicianRatingRow.avg_rating ? Number(Number(technicianRatingRow.avg_rating).toFixed(1)) : null,
     technicianRatingCount: technicianRatingRow.count,
+    sixHourSuccessRate: slaRow.total > 0 ? Number(((slaRow.within_sla / slaRow.total) * 100).toFixed(1)) : 0,
   };
 }
 
@@ -83,7 +85,7 @@ export async function GET(request: Request) {
       else if (row.status === 'cancelled') statusMap.Cancelled += row.count;
     }
 
-    const [[serviceTypeRawRows], [partRows], [revenueTrendRows], [dealerRevenueRows], [technicianRatingRows]] = await Promise.all([
+    const [[serviceTypeRawRows], [partRows], [revenueTrendRows], [dealerRevenueRows], [technicianRatingRows], [faultRows]] = await Promise.all([
       pool.query(
         `SELECT service_type, COUNT(*) AS count
          FROM job_cards
@@ -136,6 +138,15 @@ export async function GET(request: Request) {
         ORDER BY avg_rating DESC
         LIMIT 5
       `, [`${from} 00:00:00`, `${to} 23:59:59`]),
+      pool.query(
+        `SELECT symptom_type, COUNT(*) AS count
+         FROM job_cards
+         WHERE symptom_type IS NOT NULL AND symptom_type != '' AND registered_at BETWEEN ? AND ?
+         GROUP BY symptom_type
+         ORDER BY count DESC
+         LIMIT 8`,
+        [`${from} 00:00:00`, `${to} 23:59:59`]
+      ),
     ]) as any;
 
     const topIssueCategories = serviceTypeRawRows.map((r: any) => ({ label: r.service_type, count: r.count }));
@@ -149,12 +160,15 @@ export async function GET(request: Request) {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
+    const topFaults = faultRows.map((r: any) => ({ label: r.symptom_type, count: r.count }));
+
     const payloadBase = {
       current, changes: {}, previous,
       jobsTrend: trendRows.map((r: any) => ({ day: r.day, totalJobs: r.total_jobs, completedJobs: r.completed_jobs })),
       jobsByStatus: statusMap,
       jobsByServiceType: serviceTypeData,
       topIssueCategories,
+      topFaults,
       revenueTrend: revenueTrendRows.map((r: any) => ({ day: r.day, revenue: r.revenue || 0 })),
       topDealers: dealerRevenueRows.map((r: any) => ({
         id: r.dealer_id,
@@ -182,6 +196,7 @@ export async function GET(request: Request) {
       lines.push(`Avg Resolution Days,${current.avgResolutionDays},${previous.avgResolutionDays}`);
       lines.push(`Completed Jobs,${current.completedJobs},${previous.completedJobs}`);
       lines.push(`Revenue,${current.revenue},${previous.revenue}`);
+      lines.push(`6-Hour Service Success Rate (%),${current.sixHourSuccessRate},${previous.sixHourSuccessRate}`);
       lines.push('');
       lines.push('Jobs by Status');
       lines.push('Status,Count');
@@ -215,6 +230,7 @@ export async function GET(request: Request) {
         avgResolutionDays: Number((current.avgResolutionDays - previous.avgResolutionDays).toFixed(1)),
         completedJobs: pctChange(current.completedJobs, previous.completedJobs),
         revenue: pctChange(current.revenue, previous.revenue),
+        sixHourSuccessRate: Number((current.sixHourSuccessRate - previous.sixHourSuccessRate).toFixed(1)),
       },
     });
   } catch (error: any) {

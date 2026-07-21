@@ -9,6 +9,65 @@ export const dynamic = 'force-dynamic';
 
 let lastAutoAssignRun = 0;
 
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// Fake service completion detection — no single check proves fraud, so we
+// flag on any of these and let a human review, same pattern as the
+// warranty-claim fraud check:
+// 1. Marked complete under 2 minutes after work started — implausibly fast
+// 2. Completion GPS location is >5km from the customer's registered address
+// 3. No completion-stage photo/video was ever uploaded for this job
+const MIN_SERVICE_MINUTES = 2;
+const MAX_COMPLETION_DISTANCE_KM = 5;
+
+async function checkFakeCompletion(jobCardId: string) {
+  const [rows]: any = await pool.query(
+    `SELECT service_started_at, dest_latitude, dest_longitude, completion_latitude, completion_longitude
+     FROM job_cards WHERE job_card_id = ?`,
+    [jobCardId]
+  );
+  const jc = rows[0];
+  if (!jc) return { flagged: false, reasons: [] as string[] };
+
+  const reasons: string[] = [];
+
+  if (jc.service_started_at) {
+    const minutesWorked = (Date.now() - new Date(jc.service_started_at).getTime()) / 60000;
+    if (minutesWorked < MIN_SERVICE_MINUTES) {
+      reasons.push(`Marked complete just ${minutesWorked.toFixed(1)} minute(s) after work started`);
+    }
+  }
+
+  if (jc.completion_latitude != null && jc.completion_longitude != null && jc.dest_latitude != null && jc.dest_longitude != null) {
+    const distanceKm = haversineKm(
+      Number(jc.dest_latitude), Number(jc.dest_longitude),
+      Number(jc.completion_latitude), Number(jc.completion_longitude)
+    );
+    if (distanceKm > MAX_COMPLETION_DISTANCE_KM) {
+      reasons.push(`Completion location is ${distanceKm.toFixed(1)}km from the customer's registered address`);
+    }
+  }
+
+  const [[attCount]]: any = await pool.query(
+    `SELECT COUNT(*) AS total FROM job_card_attachments WHERE job_card_id = ? AND stage = 'completion' AND deleted_at IS NULL`,
+    [jobCardId]
+  );
+  if (attCount.total === 0) {
+    reasons.push('No completion photo/video was uploaded');
+  }
+
+  return { flagged: reasons.length > 0, reasons };
+}
+
 export async function POST(request: Request) {
   const body = await request.json();
   const {
@@ -235,6 +294,18 @@ export async function PATCH(request: Request) {
       } catch (invErr: any) {
         console.error('Invoice generation failed:', invErr.message);
         // don't fail the status update if invoice generation has an issue
+      }
+
+      try {
+        const { flagged, reasons } = await checkFakeCompletion(jobCardId);
+        if (flagged) {
+          await pool.query(
+            `UPDATE job_cards SET completion_flagged = 1, completion_flag_reason = ? WHERE job_card_id = ?`,
+            [reasons.join('; '), jobCardId]
+          );
+        }
+      } catch (flagErr: any) {
+        console.error('Fake completion check failed:', flagErr.message);
       }
     }
 

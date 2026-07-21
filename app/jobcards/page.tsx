@@ -71,6 +71,10 @@ export default function JobCardsPage() {
 
   const [form, setForm] = useState({ chassisNumber: searchParams.get('chassisNumber') || '', complaintText: '', serviceType: 'paid', partCategory: '', symptomType: '', priority: 'normal' });
   const [photos, setPhotos] = useState<File[]>([]);
+  const [lookupPhone, setLookupPhone] = useState('');
+  const [lookupResult, setLookupResult] = useState<any>(null);
+  const [lookupError, setLookupError] = useState('');
+  const [lookupLoading, setLookupLoading] = useState(false);
   const [location, setLocation] = useState<LocationValue>({ latitude: null, longitude: null, addressText: '', source: null });
   const [message, setMessage] = useState('');
   const [jobCards, setJobCards] = useState<any[]>([]);
@@ -118,6 +122,37 @@ export default function JobCardsPage() {
         .then((json) => setMyVehicles(json.data || []));
     }
   }, [role]);
+
+  useEffect(() => {
+    if (role === 'customer' || !/^\d{10}$/.test(lookupPhone)) {
+      setLookupResult(null);
+      setLookupError('');
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setLookupLoading(true);
+      try {
+        const res = await fetch(`/api/customers/lookup?phone=${lookupPhone}`);
+        const json = await res.json();
+        if (json.success && json.found) {
+          setLookupResult(json);
+          setLookupError('');
+          if (json.vehicles.length === 1) {
+            setForm((f) => ({ ...f, chassisNumber: json.vehicles[0].chassis_number }));
+          }
+        } else if (json.success) {
+          setLookupResult(null);
+          setLookupError('No customer found with this number');
+        } else {
+          setLookupResult(null);
+          setLookupError(json.error || 'Lookup failed');
+        }
+      } finally {
+        setLookupLoading(false);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [lookupPhone, role]);
 
   useEffect(() => {
     if (!form.chassisNumber) {
@@ -185,6 +220,8 @@ export default function JobCardsPage() {
       setPhotos([]);
       setLocation({ latitude: null, longitude: null, addressText: '', source: null });
       setWarranty(null);
+      setLookupPhone('');
+      setLookupResult(null);
       loadJobCards();
     } else {
       setMessage('Error: ' + json.error);
@@ -721,6 +758,56 @@ export default function JobCardsPage() {
 
           <form onSubmit={handleSubmit}>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {role !== 'customer' && (
+                <div className="md:col-span-3">
+                  <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Customer mobile number (optional — auto-fills vehicle & shows history)</label>
+                  <input
+                    value={lookupPhone}
+                    onChange={(e) => setLookupPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    placeholder="10-digit mobile number"
+                    className="w-full md:w-72 rounded-2xl px-4 py-3 text-sm outline-none"
+                    style={inputStyle} onFocus={inputFocus} onBlur={inputBlurH}
+                  />
+                  {lookupLoading && <p className="text-xs mt-1.5" style={{ color: MUTED }}>Looking up...</p>}
+                  {lookupError && <p className="text-xs mt-1.5" style={{ color: RED }}>{lookupError}</p>}
+                  {lookupResult && (
+                    <div className="mt-2 rounded-xl p-3 text-xs" style={{ backgroundColor: VIOLET_DIM }}>
+                      <p style={{ color: INK }} className="font-semibold mb-1.5">{lookupResult.customer.full_name}</p>
+                      {lookupResult.vehicles.length > 1 && (
+                        <div className="mb-2">
+                          <p style={{ color: MUTED }} className="mb-1">Multiple vehicles — select one:</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {lookupResult.vehicles.map((v: any) => (
+                              <button key={v.vehicle_id} type="button"
+                                onClick={() => setForm((f) => ({ ...f, chassisNumber: v.chassis_number }))}
+                                className="px-2.5 py-1 rounded-full border text-xs"
+                                style={{ borderColor: form.chassisNumber === v.chassis_number ? VIOLET : BORDER, color: form.chassisNumber === v.chassis_number ? VIOLET : INK, backgroundColor: '#fff' }}>
+                                {v.chassis_number} {v.model_name ? `— ${v.model_name}` : ''}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {lookupResult.history.length > 0 ? (
+                        <div>
+                          <p style={{ color: MUTED }} className="mb-1">Recent complaint history:</p>
+                          <ul className="space-y-1">
+                            {lookupResult.history.map((h: any) => (
+                              <li key={h.job_card_id} style={{ color: INK }}>
+                                <span style={{ color: MUTED }}>{new Date(h.registered_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                                {' — '}{h.complaint_text.slice(0, 60)}{h.complaint_text.length > 60 ? '…' : ''}
+                                {' '}<span style={{ color: VIOLET }}>({STATUS_LABEL[h.status] ?? h.status})</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : (
+                        <p style={{ color: MUTED }}>No previous complaints for this customer.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-medium mb-1.5" style={{ color: INK }}>Vehicle (chassis number) *</label>
                 {role === 'customer' ? (

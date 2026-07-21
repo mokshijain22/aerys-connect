@@ -122,6 +122,11 @@ export default function JobCardDetailPage() {
                 ⚡ Auto-assigned
               </span>
             )}
+            {jc.completion_flagged === 1 && (
+              <span className="text-xs font-semibold px-3 py-1.5 rounded-full" style={{ backgroundColor: 'rgba(226,75,74,0.10)', color: RED }}>
+                ⚠ Flagged for review
+              </span>
+            )}
             <span className="text-xs font-semibold px-3 py-1.5 rounded-full" style={{ backgroundColor: VIOLET_DIM, color: VIOLET }}>
               {STATUS_LABEL[jc.status] ?? jc.status}
             </span>
@@ -241,6 +246,13 @@ export default function JobCardDetailPage() {
           <div className="mb-6 rounded-xl p-4" style={{ backgroundColor: 'rgba(226,75,74,0.08)' }}>
             <p className="text-sm font-semibold mb-1" style={{ color: RED }}>Rejection reason</p>
             <p className="text-sm" style={{ color: INK }}>{jc.dealer_rejection_reason}</p>
+          </div>
+        )}
+
+        {jc.completion_flagged === 1 && jc.completion_flag_reason && (
+          <div className="mb-6 rounded-xl p-4" style={{ backgroundColor: 'rgba(226,75,74,0.08)' }}>
+            <p className="text-sm font-semibold mb-1" style={{ color: RED }}>⚠ Flagged for review</p>
+            <p className="text-sm" style={{ color: INK }}>{jc.completion_flag_reason}</p>
           </div>
         )}
 

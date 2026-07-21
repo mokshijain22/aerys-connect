@@ -29,6 +29,7 @@ export async function GET(
         jc.dealer_id, jc.technician_id, jc.signature_path,
         jc.verification_phone, jc.customer_verified_at,
         jc.dest_latitude, jc.dest_longitude, jc.dest_address_text,
+        jc.completion_flagged, jc.completion_flag_reason,
         v.chassis_number, v.vehicle_id, c.full_name, c.phone, c.customer_id,
         d.dealer_name, d.phone AS dealer_phone,
         tu.full_name AS technician_name, tu.phone AS technician_phone
@@ -71,7 +72,17 @@ export async function GET(
       [id]
     );
 
-    return NextResponse.json({ success: true, data: { ...jc, attachments } });
+    // only dealer/admin should see the fraud flag — hiding it from the
+    // technician/customer avoids tipping them off on how detection works
+    const canSeeFlag = role === 'super_admin' || role === 'dealer';
+    const responseData = {
+      ...jc,
+      completion_flagged: canSeeFlag ? jc.completion_flagged : undefined,
+      completion_flag_reason: canSeeFlag ? jc.completion_flag_reason : undefined,
+      attachments,
+    };
+
+    return NextResponse.json({ success: true, data: responseData });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

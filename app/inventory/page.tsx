@@ -60,6 +60,8 @@ export default function InventoryPage() {
   const [parts, setParts] = useState<{ part_id: number; part_name: string; part_code: string; category: string | null; unit_price: number }[]>([]);
   const [fastMoving, setFastMoving] = useState<{ part_id: number; part_name: string; part_code: string; category: string | null; total_quantity_used: number; jobs_used_in: number }[]>([]);
   const [fastMovingLoading, setFastMovingLoading] = useState(true);
+  const [reorderSuggestions, setReorderSuggestions] = useState<{ dealer_id: number; dealer_name: string; part_id: number; part_name: string; part_code: string; category: string | null; quantity: number; min_stock_alert: number; used_last_30d: number; suggested_reorder_qty: number }[]>([]);
+  const [reorderLoading, setReorderLoading] = useState(true);
   const [mode, setMode] = useState<'existing' | 'new'>('existing');
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
@@ -72,6 +74,7 @@ export default function InventoryPage() {
 
   useEffect(() => {
     fetchFastMoving();
+    fetchReorderSuggestions();
   }, [dealerFilter]);
 
   async function fetchFastMoving() {
@@ -88,6 +91,21 @@ export default function InventoryPage() {
       }
     } finally {
       setFastMovingLoading(false);
+    }
+  }
+
+  async function fetchReorderSuggestions() {
+    setReorderLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (dealerFilter) params.set('dealer', dealerFilter);
+      const res = await fetch(`/api/inventory/reorder-suggestions?${params}`);
+      const json = await res.json();
+      if (json.success) {
+        setReorderSuggestions(json.data);
+      }
+    } finally {
+      setReorderLoading(false);
     }
   }
 
@@ -275,6 +293,41 @@ export default function InventoryPage() {
                   <p className="text-[11px] mb-2" style={{ color: MUTED }}>{p.part_code}</p>
                   <p className="text-xl font-extrabold tabular-nums" style={{ color: VIOLET }}>{p.total_quantity_used}</p>
                   <p className="text-[11px]" style={{ color: MUTED }}>units used · {p.jobs_used_in} jobs</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Reorder Suggestions */}
+      <div className="rounded-[20px] bg-white border overflow-hidden fade-up mb-4" style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}>
+        <div className="p-6 pb-3 flex items-center justify-between">
+          <div>
+            <p className="font-bold text-[15px]" style={{ color: INK }}>Reorder Suggestions</p>
+            <p className="text-xs mt-0.5" style={{ color: MUTED }}>Parts at or below min stock, with quantity suggested from 30-day usage</p>
+          </div>
+        </div>
+        <div className="overflow-x-auto pb-2">
+          {reorderLoading ? (
+            <p className="px-6 pb-5 text-sm" style={{ color: MUTED }}>Loading...</p>
+          ) : reorderSuggestions.length === 0 ? (
+            <p className="px-6 pb-5 text-sm" style={{ color: MUTED }}>Nothing to reorder — all stock is above minimum levels.</p>
+          ) : (
+            <div className="flex gap-3 px-6 pb-5 overflow-x-auto">
+              {reorderSuggestions.map((p) => (
+                <div key={`${p.dealer_id}-${p.part_id}`} className="flex-shrink-0 w-56 rounded-2xl p-4 border" style={{ borderColor: BORDER, background: `linear-gradient(160deg, #fff 65%, ${ORANGE}0d 100%)` }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(245,166,35,0.12)', color: ORANGE }}>
+                      {p.quantity === 0 ? 'Out of stock' : 'Low stock'}
+                    </span>
+                    <span className="text-[11px]" style={{ color: MUTED }}>{p.category || '—'}</span>
+                  </div>
+                  <p className="text-sm font-semibold truncate" style={{ color: INK }}>{p.part_name}</p>
+                  <p className="text-[11px] mb-2" style={{ color: MUTED }}>{p.part_code} · {p.dealer_name}</p>
+                  <p className="text-[11px]" style={{ color: MUTED }}>Current: {p.quantity} · Min: {p.min_stock_alert}</p>
+                  <p className="text-xl font-extrabold tabular-nums mt-1" style={{ color: ORANGE }}>+{p.suggested_reorder_qty}</p>
+                  <p className="text-[11px]" style={{ color: MUTED }}>suggested reorder qty</p>
                 </div>
               ))}
             </div>
