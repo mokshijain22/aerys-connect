@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ResponsiveLayout } from '@/app/components/ResponsiveLayout';
 import { NAV_ITEMS } from '@/app/lib/nav-items';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const VIOLET = '#6C5CE7';
 const VIOLET_LIGHT = '#8B7CF8';
@@ -56,6 +58,7 @@ const STATUS_COLORS: Record<string, string> = {
 export default function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
@@ -79,6 +82,106 @@ export default function AnalyticsPage() {
       alert('Failed to export. Please try again.');
     } finally {
       setExporting(false);
+    }
+  }
+
+  function exportPdf() {
+    if (!data) return;
+    setExportingPdf(true);
+    try {
+      const doc = new jsPDF();
+      const marginX = 14;
+
+      doc.setFontSize(16);
+      doc.setTextColor(26, 26, 46);
+      doc.text('AERYS Service Connect — Analytics Report', marginX, 16);
+      doc.setFontSize(10);
+      doc.setTextColor(107, 114, 128);
+      doc.text(`Date range: ${from} to ${to}`, marginX, 23);
+      doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, marginX, 28);
+
+      autoTable(doc, {
+        startY: 34,
+        head: [['Metric', 'Current', 'Previous']],
+        body: [
+          ['Total Vehicles', String(data.current.totalVehicles), String(data.previous.totalVehicles)],
+          ['Total Jobs', String(data.current.totalJobs), String(data.previous.totalJobs)],
+          ['Completed Jobs', String(data.current.completedJobs), String(data.previous.completedJobs)],
+          ['Warranty Claims', String(data.current.warrantyClaims), String(data.previous.warrantyClaims)],
+          ['Avg. Resolution (days)', String(data.current.avgResolutionDays), String(data.previous.avgResolutionDays)],
+          ['Revenue', formatLakh(data.current.revenue), formatLakh(data.previous.revenue)],
+          ['6-Hour Success Rate', `${data.current.sixHourSuccessRate}%`, `${data.previous.sixHourSuccessRate}%`],
+          ['Avg. Customer Rating', data.current.avgCustomerRating != null ? String(data.current.avgCustomerRating) : '—', data.previous.avgCustomerRating != null ? String(data.previous.avgCustomerRating) : '—'],
+          ['Avg. Technician Rating', data.current.avgTechnicianRating != null ? String(data.current.avgTechnicianRating) : '—', data.previous.avgTechnicianRating != null ? String(data.previous.avgTechnicianRating) : '—'],
+        ],
+        theme: 'striped',
+        headStyles: { fillColor: [108, 92, 231] },
+        margin: { left: marginX, right: marginX },
+      });
+
+      let nextY = (doc as any).lastAutoTable.finalY + 10;
+
+      autoTable(doc, {
+        startY: nextY,
+        head: [['Status', 'Count']],
+        body: Object.entries(data.jobsByStatus).map(([status, count]) => [status, String(count)]),
+        theme: 'striped',
+        headStyles: { fillColor: [108, 92, 231] },
+        margin: { left: marginX, right: marginX },
+        didDrawPage: () => {}, // keep table start consistent
+      });
+      nextY = (doc as any).lastAutoTable.finalY + 10;
+
+      if (data.topDealers?.length) {
+        doc.setFontSize(11);
+        doc.setTextColor(26, 26, 46);
+        doc.text('Top Dealers', marginX, nextY);
+        autoTable(doc, {
+          startY: nextY + 4,
+          head: [['Dealer', 'Revenue', 'Avg. Rating']],
+          body: data.topDealers.map((d) => [d.name, formatLakh(d.revenue), d.avgRating != null ? String(d.avgRating) : '—']),
+          theme: 'striped',
+          headStyles: { fillColor: [108, 92, 231] },
+          margin: { left: marginX, right: marginX },
+        });
+        nextY = (doc as any).lastAutoTable.finalY + 10;
+      }
+
+      if (data.topTechnicians?.length) {
+        doc.setFontSize(11);
+        doc.setTextColor(26, 26, 46);
+        doc.text('Top Technicians', marginX, nextY);
+        autoTable(doc, {
+          startY: nextY + 4,
+          head: [['Technician', 'Avg. Rating', 'Ratings Count']],
+          body: data.topTechnicians.map((t) => [t.name, t.avgRating != null ? String(t.avgRating) : '—', String(t.ratingCount)]),
+          theme: 'striped',
+          headStyles: { fillColor: [108, 92, 231] },
+          margin: { left: marginX, right: marginX },
+        });
+        nextY = (doc as any).lastAutoTable.finalY + 10;
+      }
+
+      if (data.topIssueCategories?.length) {
+        doc.setFontSize(11);
+        doc.setTextColor(26, 26, 46);
+        doc.text('Top Issue Categories', marginX, nextY);
+        autoTable(doc, {
+          startY: nextY + 4,
+          head: [['Category', 'Count']],
+          body: data.topIssueCategories.map((c) => [c.label, String(c.count)]),
+          theme: 'striped',
+          headStyles: { fillColor: [108, 92, 231] },
+          margin: { left: marginX, right: marginX },
+        });
+      }
+
+      doc.save(`aerys-analytics-report_${from}_to_${to}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setExportingPdf(false);
     }
   }
 
@@ -158,11 +261,18 @@ export default function AnalyticsPage() {
               Apply
             </button>
           </div>
-          <button onClick={exportCsv} disabled={exporting}
-            className="text-sm font-semibold px-5 py-2.5 rounded-xl disabled:opacity-50 transition-all duration-200 hover:-translate-y-0.5"
-            style={{ border: `1px solid ${BORDER}`, color: INK, backgroundColor: '#fff' }}>
-            {exporting ? 'Exporting...' : 'Export CSV'}
-          </button>
+          <div className="flex gap-2">
+            <button onClick={exportCsv} disabled={exporting}
+              className="text-sm font-semibold px-5 py-2.5 rounded-xl disabled:opacity-50 transition-all duration-200 hover:-translate-y-0.5"
+              style={{ border: `1px solid ${BORDER}`, color: INK, backgroundColor: '#fff' }}>
+              {exporting ? 'Exporting...' : 'Export CSV'}
+            </button>
+            <button onClick={exportPdf} disabled={exportingPdf || !data}
+              className="text-sm font-semibold text-white px-5 py-2.5 rounded-xl disabled:opacity-50 transition-all duration-200 hover:-translate-y-0.5"
+              style={{ background: `linear-gradient(135deg, ${VIOLET_LIGHT}, ${VIOLET})`, boxShadow: `0 6px 16px -6px ${VIOLET}66` }}>
+              {exportingPdf ? 'Generating...' : '📄 Export PDF'}
+            </button>
+          </div>
         </div>
 
         {/* Stat cards */}

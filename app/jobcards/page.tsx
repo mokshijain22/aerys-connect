@@ -79,6 +79,7 @@ export default function JobCardsPage() {
   const [message, setMessage] = useState('');
   const [jobCards, setJobCards] = useState<any[]>([]);
   const [technicians, setTechnicians] = useState<any[]>([]);
+  const [techDistances, setTechDistances] = useState<Record<number, any[]>>({});
   const [selectedTech, setSelectedTech] = useState<Record<number, string>>({});
   const [myVehicles, setMyVehicles] = useState<any[]>([]);
   const [warranty, setWarranty] = useState<any>(null);
@@ -113,8 +114,28 @@ export default function JobCardsPage() {
     setTechnicians(json.data || []);
   };
 
+  const loadTechDistances = async (jobCardId: number) => {
+    if (role !== 'dealer' && role !== 'super_admin') return;
+    if (techDistances[jobCardId]) return; // already fetched
+    try {
+      const res = await fetch(`/api/jobcards/${jobCardId}/technician-distances`);
+      const json = await res.json();
+      if (json.success) {
+        setTechDistances((prev) => ({ ...prev, [jobCardId]: json.data }));
+      }
+    } catch {
+      // silently ignore — dropdown just falls back to plain technician names
+    }
+  };
+
   useEffect(() => { loadJobCards(); }, []);
   useEffect(() => { loadTechnicians(); }, [role]);
+  useEffect(() => {
+    if (role !== 'dealer' && role !== 'super_admin') return;
+    jobCards
+      .filter((jc) => jc.status === 'acknowledged')
+      .forEach((jc) => loadTechDistances(jc.job_card_id));
+  }, [jobCards, role]);
   useEffect(() => {
     if (role === 'customer') {
       fetch('/api/vehicles')
@@ -523,9 +544,23 @@ export default function JobCardsPage() {
               onChange={(e) => setSelectedTech({ ...selectedTech, [jc.job_card_id]: e.target.value })}
               className="text-xs rounded-lg px-2 py-1.5 outline-none" style={inputStyle}>
               <option value="">Select technician</option>
-              {technicians.map((t) => (
-                <option key={t.technician_id} value={t.technician_id}>{t.full_name}</option>
-              ))}
+              {(() => {
+                const distances = techDistances[jc.job_card_id];
+                if (!distances) {
+                  // distances not loaded yet (or no destination captured) — plain list, alphabetical
+                  return technicians.map((t) => (
+                    <option key={t.technician_id} value={t.technician_id}>{t.full_name}</option>
+                  ));
+                }
+                return distances.map((d: any) => {
+                  const label = d.distanceKm != null
+                    ? `${d.fullName} — ${d.distanceKm} km (~${d.etaMinutes} min)`
+                    : `${d.fullName} — location unavailable`;
+                  return (
+                    <option key={d.technicianId} value={d.technicianId}>{label}</option>
+                  );
+                });
+              })()}
             </select>
             <button onClick={() => assignTechnician(jc.job_card_id)}
               className="text-xs font-medium px-3 py-1.5 rounded-lg border" style={{ borderColor: VIOLET, color: VIOLET }}>

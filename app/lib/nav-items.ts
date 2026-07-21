@@ -11,5 +11,6 @@ export const NAV_ITEMS = [
   { label: 'WhatsApp Inbox', href: '/whatsapp-inbox', key: 'whatsappInbox' as const },
   { label: 'Inventory', href: '/inventory', key: 'inventory' as const },
   { label: 'Analytics', href: '/analytics', key: 'analytics' as const },
+  { label: 'Fraud Alerts', href: '/fraud-alerts', key: 'fraudAlerts' as const },
   { label: 'Settings', href: '/settings', key: 'settings' as const },
 ];
